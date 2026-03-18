@@ -1170,6 +1170,11 @@ __conn_close(WT_CONNECTION *wt_conn, const char *config)
 
     conn = (WT_CONNECTION_IMPL *)wt_conn;
 
+    #ifdef HAVE_ANALYZE_CACHE
+    Iaf_print(conn->iaf);
+    Iaf_destroy(conn->iaf);
+    #endif
+
     CONNECTION_API_CALL(conn, session, close, config, cfg);
 err:
     __wt_verbose_info(session, WT_VERB_RECOVERY_PROGRESS, "%s", "closing WiredTiger library.");
@@ -3115,6 +3120,10 @@ wiredtiger_open(const char *home, WT_EVENT_HANDLER *event_handler, const char *c
 
     WT_RET(__wt_calloc_one(NULL, &conn));
     conn->iface = stdc;
+
+    #ifdef HAVE_ANALYZE_CACHE
+    conn->iaf = Iaf_create(0, 1000000);
+    #endif
 
     /*
      * Immediately link the structure into the connection structure list: the only thing ever looked

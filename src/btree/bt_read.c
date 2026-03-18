@@ -504,6 +504,11 @@ __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags
     if (F_ISSET(session, WT_SESSION_IGNORE_CACHE_SIZE))
         LF_SET(WT_READ_IGNORE_CACHE_SIZE);
 
+
+    #ifdef HAVE_ANALYZE_CACHE
+    Iaf_write(S2C(session)->iaf, ref);
+    #endif
+
     /*
      * Ignore reads of pages already known to be in cache, otherwise the eviction server can
      * dominate these statistics.

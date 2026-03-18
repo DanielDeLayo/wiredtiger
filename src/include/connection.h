@@ -39,11 +39,6 @@ struct __wt_process {
 
     WT_CACHE_POOL *cache_pool; /* shared cache information */
 
-
-#ifdef HAVE_ANALYZE_CACHE
-    //BoundedIAF iaf(sampling_log2, seed, part, 65536, maxcache);
-#endif
-
     /*
      * WT_CURSOR.modify operations set unspecified bytes to space in 'S' format and to a nul byte in
      * all other formats. It makes it easier to debug format test program stress failures if strings
@@ -642,6 +637,10 @@ typedef enum __wt_conn_debug_disagg_address_cookie_upgrade {
  */
 struct __wt_connection_impl {
     WT_CONNECTION iface;
+
+    #ifdef HAVE_ANALYZE_CACHE
+    Iaf iaf;
+    #endif
 
     /* For operations without an application-supplied session */
     wt_shared WT_SESSION_IMPL *default_session;
