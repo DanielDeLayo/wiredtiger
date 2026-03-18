@@ -12,3 +12,6 @@ target_compile_options(
     wiredtiger_dir_store
     PRIVATE ${COMPILER_DIAGNOSTIC_C_FLAGS}
 )
+if(HAVE_ANALYZE_CACHE)
+    target_link_libraries(wiredtiger_dir_store IAF::IAF)
+endif()

@@ -14,3 +14,6 @@ target_compile_options(
     PRIVATE ${COMPILER_DIAGNOSTIC_C_FLAGS}
 )
 target_link_libraries(wiredtiger_fail_fs test_util)
+if(HAVE_ANALYZE_CACHE)
+    target_link_libraries(wiredtiger_fail_fs IAF::IAF)
+endif()

@@ -8,10 +8,14 @@
 
 #pragma once
 
+#ifdef HAVE_ANALYZE_CACHE
+    #include "iaf_api.h"
+#endif
+
 /*******************************************
  * Global per-process structure.
  *******************************************/
-/*
+/*  
  * WT_PROCESS --
  *	Per-process information for the library.
  */
@@ -34,6 +38,11 @@ struct __wt_process {
     bool tiered_shared_2023; /* tiered shared run-time configuration */
 
     WT_CACHE_POOL *cache_pool; /* shared cache information */
+
+
+#ifdef HAVE_ANALYZE_CACHE
+    //BoundedIAF iaf(sampling_log2, seed, part, 65536, maxcache);
+#endif
 
     /*
      * WT_CURSOR.modify operations set unspecified bytes to space in 'S' format and to a nul byte in
