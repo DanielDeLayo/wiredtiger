@@ -25,3 +25,4 @@ TCMALLOC_LIB/
 .idea
 cmake-build-release
 cmake-build-debug
+WT_TEST/
