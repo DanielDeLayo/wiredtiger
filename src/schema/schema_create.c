@@ -30,8 +30,16 @@ __check_imported_ts(
 
     ckptbase = NULL;
     txn_global = &S2C(session)->txn_global;
-    ts = against_stable ? txn_global->stable_timestamp : txn_global->oldest_timestamp;
-    ts_name = against_stable ? "stable" : "oldest";
+
+    if (against_stable) {
+        ts_name = "stable";
+        ts = __wt_get_stable_timestamp(session);
+    } else {
+        ts_name = "oldest";
+        /* FIXME-WT-16776: use an atomic read operation similar to the stable timestamp
+         * implementation. */
+        ts = txn_global->oldest_timestamp;
+    }
 
     WT_ERR_NOTFOUND_OK(
       __wt_meta_ckptlist_get_from_config(session, false, &ckptbase, NULL, config), true);
@@ -702,14 +710,8 @@ __create_colgroup(WT_SESSION_IMPL *session, const char *name, bool exclusive, co
         __wt_free(session, cgconf);
         WT_ERR(__wt_config_collapse(session, cfg, &cgconf));
 
-        /* FIXME-WT-12021 Replace this with a proper failpoint once the framework is available. */
-        if (FLD_ISSET(S2C(session)->debug_flags, WT_CONN_DEBUG_CRASH_POINT_COLGROUP)) {
-            __wt_verbose_warning(session, WT_VERB_DEFAULT,
-              "Simulating a crash before inserting column group metadata entry '%s'", name);
-            /* Wait for the file metadata entry to be persisted. */
-            __wt_sleep(2, 0);
-            __wt_abort(session);
-        }
+        __wti_debug_crash_if_flag_set(session, WT_CONN_DEBUG_CRASH_POINT_BEFORE_INSERT_COLGROUP,
+          "before inserting a colgroup", name);
 
         if (!exists) {
             WT_ERR(__wt_metadata_insert(session, name, cgconf));
@@ -1054,6 +1056,9 @@ __create_table(WT_SESSION_IMPL *session, const char *uri, bool exclusive, const 
     } else
         WT_ERR(__wt_metadata_insert(session, uri, tablecfg));
 
+    __wti_debug_crash_if_flag_set(session, WT_CONN_DEBUG_CRASH_POINT_BEFORE_INSERT_FILE,
+      "before inserting a file entry for table", uri);
+
     if (ncolgroups == 0) {
         len = strlen("colgroup:") + strlen(tablename) + 1;
         WT_ERR(__wt_calloc_def(session, len, &cgname));
@@ -1096,7 +1101,8 @@ __create_table(WT_SESSION_IMPL *session, const char *uri, bool exclusive, const 
             __wt_scr_free(session, &tmp);
             WT_ERR(__wt_scr_alloc(session, 0, &tmp));
             WT_ERR(__wt_buf_fmt(session, tmp, "file:%s.wt_stable", tablename));
-            WT_ERR(__wt_disagg_update_metadata_later(session, tmp->data, tablename));
+            WT_ERR(__wt_disagg_enqueue_metadata_operation(
+              session, tmp->data, tablename, WT_SHARED_METADATA_CREATE));
         }
 
 err:
@@ -1214,7 +1220,8 @@ __create_layered(WT_SESSION_IMPL *session, const char *uri, bool exclusive, cons
          * FIXME-WT-14725: We should make this more efficient in the future. If this creation is a
          * part of a table creation, it would result in doing extra work.
          */
-        WT_ERR(__wt_disagg_update_metadata_later(session, stable_uri, tablename));
+        WT_ERR(__wt_disagg_enqueue_metadata_operation(
+          session, stable_uri, tablename, WT_SHARED_METADATA_CREATE));
     }
 
 err:
