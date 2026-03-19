@@ -142,6 +142,7 @@ if(HAVE_ANALYZE_CACHE)
     )
 
     FetchContent_MakeAvailable(IAF)
+    set_property(TARGET IAF PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # Enable CTest. Subsequent targets may additionally define their own ctest definitions.
