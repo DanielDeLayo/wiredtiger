@@ -1170,11 +1170,6 @@ __conn_close(WT_CONNECTION *wt_conn, const char *config)
 
     conn = (WT_CONNECTION_IMPL *)wt_conn;
 
-    #ifdef HAVE_ANALYZE_CACHE
-    Iaf_print(conn->iaf);
-    Iaf_destroy(conn->iaf);
-    #endif
-
     CONNECTION_API_CALL(conn, session, close, config, cfg);
 err:
     __wt_verbose_info(session, WT_VERB_RECOVERY_PROGRESS, "%s", "closing WiredTiger library.");
@@ -1301,6 +1296,11 @@ err:
 
     /* We no longer have a session, don't try to update it. */
     session = NULL;
+
+    #ifdef HAVE_ANALYZE_CACHE
+    Iaf_print(conn->iaf);
+    Iaf_destroy(&(conn->iaf));
+    #endif
 
     API_END_RET_NOTFOUND_MAP(session, ret);
 }
