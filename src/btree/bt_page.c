@@ -868,6 +868,10 @@ __wt_page_alloc(WT_SESSION_IMPL *session, uint8_t type, uint32_t alloc_entries, 
 
     page->type = type;
     __wt_evict_page_init(page);
+#ifdef HAVE_ANALYZE_CACHE
+    assert(page->persistent_page_id == 0 && "Initializing over existing persistent_page_id!");
+    page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+#endif
 
     switch (type) {
     case WT_PAGE_COL_INT:

@@ -832,6 +832,10 @@ struct __wt_page {
 #else
 #define WT_SPLIT_PAGE_SAVE_STATE(page, session, e, g)
 #endif
+
+#ifdef HAVE_ANALYZE_CACHE
+    uint64_t persistent_page_id;
+#endif
 };
 
 /*
