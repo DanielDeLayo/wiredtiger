@@ -75,7 +75,11 @@ __block_addr_unpack(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t **p
         *offsetp = (wt_off_t)(o + 1) * block->allocsize;
         *sizep = (uint32_t)s * block->allocsize;
         *checksump = (uint32_t)c;
+        #ifdef HAVE_ANALYZE_CACHE
+        assert( (addr_size ==0 || *objectidp != 0) && "Attempting to persist bad object id!");
+        #endif
     }
+  
 
     return (0);
 }

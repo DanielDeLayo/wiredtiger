@@ -131,7 +131,10 @@ __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint
         /* Read any root page. */
         if (ci->root_offset != WT_BLOCK_INVALID_OFFSET) {
             /* A checkpoint shouldn't point to an object created after this one. */
-            //WT_ASSERT(session, block->objectid >= ci->root_objectid);
+            #ifdef HAVE_ANALYZE_CACHE
+                ci->root_objectid = block->objectid;
+            #endif
+            WT_ASSERT(session, block->objectid >= ci->root_objectid);
 
             endp = root_addr;
             WT_ERR(__wt_block_addr_pack(
@@ -156,10 +159,6 @@ __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint
             WT_ERR(__wti_block_extlist_read_avail(session, block, &ci->avail, ci->file_size));
         }
     }
-
-    #ifdef HAVE_ANALYZE_CACHE
-    block->objectid = IAF_ID_NEED_REINIT;
-    #endif
 
     /*
      * If the object can be written, that means anything written after the checkpoint is no longer

@@ -10,6 +10,10 @@
 #include "reconcile_private.h"
 #include "reconcile_inline.h"
 
+#ifdef HAVE_ANANLYZE_CACHE
+#include "iaf_api.h"
+#endif
+
 static int __rec_cleanup(WT_SESSION_IMPL *, WTI_RECONCILE *);
 static int __rec_destroy(WT_SESSION_IMPL *, void *);
 static int __rec_destroy_session(WT_SESSION_IMPL *);
@@ -2264,6 +2268,7 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
             __wt_page_block_meta_assign(session, multi->block_meta);
     }
 #ifdef HAVE_ANALYZE_CACHE
+    assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!");
     if (multi->block_meta == NULL)
     { 
         __wt_page_block_meta_assign(session, &block_meta_init);
