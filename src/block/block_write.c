@@ -7,6 +7,7 @@
  */
 
 #include "wt_internal.h"
+#include <stdint.h>
 
 /*
  * __wti_block_truncate --
@@ -200,6 +201,12 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     uint8_t *endp;
 
     WT_UNUSED(block_meta);
+    #ifdef HAVE_ANALYZE_CACHE
+    //FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent
+    assert(block_meta && "Block metadata uninit!");
+    block->objectid = (uint32_t) block_meta->persistent_page_id;
+    assert(block->objectid == block_meta->persistent_page_id && "Persistent page id precision loss!");
+    #endif
 
     WT_RET(__wti_block_write_off(
       session, block, buf, &offset, &size, &checksum, data_checksum, checkpoint_io, false));

@@ -403,6 +403,10 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
         page->disagg_info->old_rec_lsn_max = block_meta.disagg_lsn;
         page->disagg_info->rec_lsn_max = block_meta.disagg_lsn;
     }
+#ifdef HAVE_ANALYZE_CACHE
+    assert(page && "Page uninitialized!?!");
+    page->persistent_page_id = block_meta.persistent_page_id;
+#endif
 
     __wt_free(session, tmp);
 
@@ -684,7 +688,11 @@ skip_evict:
             WT_ASSERT(session, page != NULL);
 
 #ifdef HAVE_ANALYZE_CACHE
-    assert(page->persistent_page_id != 0 && "Uninitialized persistent_page_id!");
+    assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+    if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+    {
+        page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+    }
     Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
 #endif
 

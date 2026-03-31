@@ -30,6 +30,10 @@ __wt_bm_read(WT_BM *bm, WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_ME
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    #ifdef HAVE_ANALYZE_CACHE
+    assert(block_meta && "Block metadata uninit!");
+    block_meta->persistent_page_id = objectid;
+    #endif
 
     if (bm->is_multi_handle)
         /* Lookup the block handle */
