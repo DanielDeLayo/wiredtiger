@@ -75,9 +75,6 @@ __block_addr_unpack(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t **p
         *offsetp = (wt_off_t)(o + 1) * block->allocsize;
         *sizep = (uint32_t)s * block->allocsize;
         *checksump = (uint32_t)c;
-        #ifdef HAVE_ANALYZE_CACHE
-        assert( (addr_size ==0 || *objectidp != 0) && "Attempting to persist bad object id!");
-        #endif
     }
   
 
@@ -319,12 +316,12 @@ __wti_block_ckpt_pack(
     a = ci->ckpt_size;
     WT_RET(__wt_vpack_uint(pp, 0, a));
     /* Don't store object IDs of zero, the function that cracks the cookie defaults IDs to 0. */
-    if (block->objectid != 0) {
+    /*if (block->objectid != 0) {
         **pp = WT_BLOCK_COOKIE_FILEID;
         ++(*pp);
         a = block->objectid;
         WT_RET(__wt_vpack_uint(pp, 0, a));
-    }
+    }*/
 
     return (0);
 }

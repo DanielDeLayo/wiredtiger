@@ -131,9 +131,6 @@ __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint
         /* Read any root page. */
         if (ci->root_offset != WT_BLOCK_INVALID_OFFSET) {
             /* A checkpoint shouldn't point to an object created after this one. */
-            #ifdef HAVE_ANALYZE_CACHE
-                ci->root_objectid = block->objectid;
-            #endif
             WT_ASSERT(session, block->objectid >= ci->root_objectid);
 
             endp = root_addr;
