@@ -328,6 +328,7 @@ __wt_block_verify_addr(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /* Add to the per-file list. */
     WT_RET(__verify_filefrag_add(session, block, NULL, offset, size, false));

@@ -33,6 +33,7 @@ __wt_bm_read(WT_BM *bm, WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_ME
     #ifdef HAVE_ANALYZE_CACHE
     assert(block_meta && "Block metadata uninit!");
     block_meta->persistent_page_id = objectid;
+    objectid = 0;
     #endif
 
     if (bm->is_multi_handle)
@@ -124,7 +125,8 @@ __wt_bm_corrupt(WT_BM *bm, WT_SESSION_IMPL *session, const uint8_t *addr, size_t
     /* Crack the cookie, dump the block. */
     WT_ERR(__wt_block_addr_unpack(
       session, bm->block, addr, addr_size, &objectid, &offset, &size, &checksum));
-    WT_ERR(__wt_bm_corrupt_dump(session, tmp, objectid, offset, size, checksum));
+    objectid = 0;
+      WT_ERR(__wt_bm_corrupt_dump(session, tmp, objectid, offset, size, checksum));
 
 err:
     __wt_scr_free(session, &tmp);

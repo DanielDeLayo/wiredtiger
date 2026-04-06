@@ -103,6 +103,7 @@ validate_write_block(WT_BM *bm, const std::shared_ptr<mock_session> &session, WT
     uint32_t objectid, size, checksum;
     REQUIRE(__wt_block_addr_unpack(session->get_wt_session_impl(), bm->block, cookie.addr.data(),
               cookie.size, &objectid, &offset, &size, &checksum) == 0);
+    objectid = 0;
     REQUIRE(offset % std::stoi(ALLOCATION_SIZE) == 0);
     REQUIRE(size == write_buf->memsize);
     REQUIRE(checksum == blk->checksum);

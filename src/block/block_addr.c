@@ -153,6 +153,7 @@ __wt_block_addr_invalid(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
 #ifdef HAVE_DIAGNOSTIC
     /*
@@ -184,6 +185,7 @@ __wt_block_addr_string(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /* Printable representation. */
     WT_RET(__wt_buf_fmt(session, buf,
@@ -316,12 +318,12 @@ __wti_block_ckpt_pack(
     a = ci->ckpt_size;
     WT_RET(__wt_vpack_uint(pp, 0, a));
     /* Don't store object IDs of zero, the function that cracks the cookie defaults IDs to 0. */
-    /*if (block->objectid != 0) {
+    if (block->objectid != 0) {
         **pp = WT_BLOCK_COOKIE_FILEID;
         ++(*pp);
         a = block->objectid;
         WT_RET(__wt_vpack_uint(pp, 0, a));
-    }*/
+    }
 
     return (0);
 }

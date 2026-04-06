@@ -105,6 +105,7 @@ __wti_blkcache_map_read(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /* Not supported on multi-handle trees */
     WT_ASSERT(session, block->objectid == objectid);

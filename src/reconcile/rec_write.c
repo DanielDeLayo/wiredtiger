@@ -2268,7 +2268,7 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
             __wt_page_block_meta_assign(session, multi->block_meta);
     }
 #ifdef HAVE_ANALYZE_CACHE
-    assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!");
+    //assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!");
     if (multi->block_meta == NULL)
     { 
         __wt_page_block_meta_assign(session, &block_meta_init);

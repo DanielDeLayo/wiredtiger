@@ -618,6 +618,7 @@ __wt_block_compact_page_skip(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     return (__compact_page_skip(session, block, offset, size, skipp));
 }
@@ -644,6 +645,7 @@ __wt_block_compact_page_rewrite(
 
     WT_ERR(__wt_block_addr_unpack(
       session, block, addr, *addr_sizep, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /* Check if the block is worth rewriting. */
     WT_ERR(__compact_page_skip(session, block, offset, size, skipp));
