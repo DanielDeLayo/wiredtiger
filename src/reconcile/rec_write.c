@@ -2277,6 +2277,7 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
     else {
         block_meta = multi->block_meta;
     }
+    //TODO FIXME Follow the logic of the page ids above
     block_meta->persistent_page_id = page->persistent_page_id;
 #endif
     WT_RET(__rec_write(session, &chunk->image, block_meta, addr, addr_sizep,

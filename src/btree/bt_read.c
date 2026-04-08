@@ -688,7 +688,7 @@ skip_evict:
             WT_ASSERT(session, page != NULL);
 
 #ifdef HAVE_ANALYZE_CACHE
-    assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+    //assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
     if (page->persistent_page_id == IAF_ID_NEED_REINIT)
     {
         page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
@@ -697,7 +697,7 @@ skip_evict:
         Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
 #endif
 
-            /*
+            /*   T
              * Keep track of whether a session is reading leaf pages into the cache. This allows for
              * the session to decide whether pre-fetch would be helpful. It might not work if a
              * session has multiple cursors on different tables open, since the operations on

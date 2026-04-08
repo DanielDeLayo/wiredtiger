@@ -135,7 +135,7 @@ __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint
 
             endp = root_addr;
             WT_ERR(__wt_block_addr_pack(
-              block, &endp, ci->root_objectid, ci->root_offset, ci->root_size, ci->root_checksum));
+              block, &endp, 1, ci->root_offset, ci->root_size, ci->root_checksum));
             *root_addr_sizep = WT_PTRDIFF(endp, root_addr);
         }
 
