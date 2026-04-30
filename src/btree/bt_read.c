@@ -688,13 +688,17 @@ skip_evict:
             WT_ASSERT(session, page != NULL);
 
 #ifdef HAVE_ANALYZE_CACHE
-    //assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
-    if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+
+    if (!F_ISSET(btree, WT_BTREE_SPECIAL_FLAGS) && !F_ISSET(session, WT_SESSION_INTERNAL)) 
     {
-        page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+        if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+        {
+            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        }
+        if (page->persistent_page_id != IAF_ID_UNINIT)
+            Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
     }
-    if (page->persistent_page_id != IAF_ID_UNINIT)
-        Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
 #endif
 
             /*   T
