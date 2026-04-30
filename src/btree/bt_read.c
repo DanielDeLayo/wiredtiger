@@ -687,21 +687,6 @@ skip_evict:
             page = ref->page;
             WT_ASSERT(session, page != NULL);
 
-#ifdef HAVE_ANALYZE_CACHE
-
-    // Check if we're in a metadata zone or not.
-    if (!F_ISSET(btree, WT_BTREE_SPECIAL_FLAGS) && !F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS)  ) 
-    {
-        assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
-        if (page->persistent_page_id == IAF_ID_NEED_REINIT)
-        {
-            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
-        }
-        if (page->persistent_page_id != IAF_ID_UNINIT)
-            Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
-    }
-#endif
-
             /*   T
              * Keep track of whether a session is reading leaf pages into the cache. This allows for
              * the session to decide whether pre-fetch would be helpful. It might not work if a
@@ -721,6 +706,20 @@ skip_evict:
             }
 
             __wt_evict_touch_page(session, page, LF_ISSET(WT_READ_INTERNAL_OP), wont_need);
+
+#ifdef HAVE_ANALYZE_CACHE
+        // Check if we're in a metadata zone or not.
+        //if (!F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS)  ) 
+        //{
+        assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+        if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+        {
+            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        }
+        if (page->persistent_page_id != IAF_ID_UNINIT)
+            Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
+        //}
+#endif
 
             /*
              * Check if we need an autocommit transaction. Starting a transaction can trigger
