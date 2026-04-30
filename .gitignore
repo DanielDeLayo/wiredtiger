@@ -26,3 +26,6 @@ TCMALLOC_LIB/
 cmake-build-release
 cmake-build-debug
 WT_TEST/
+WT_HOME*
+WT_BLOCK*
+backup_block_full.*
