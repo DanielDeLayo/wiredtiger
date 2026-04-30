@@ -466,7 +466,7 @@ main(int argc, char *argv[])
         take_incr_backup(session, i);
 
         printf("Iteration %d: dumping and comparing data\n", i);
-        //error_check(compare_backups(i));
+        error_check(compare_backups(i));
     }
 
     printf("Close and reopen the connection\n");
