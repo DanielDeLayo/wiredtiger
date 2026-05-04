@@ -440,7 +440,7 @@ __wt_blkcache_read_multi(WT_SESSION_IMPL *session, WT_ITEM **buf, size_t *buf_co
          * FIXME-WT-14717: we used to read garbage values for block meta from the block cache for
          * non-disaggregated case. It's unclear if we still do -- pass a NULL for now.
          */
-        WT_ERR(__wt_blkcache_read(session, &tmp[0], NULL, addr, addr_size));
+        WT_ERR(__wt_blkcache_read(session, &tmp[0], block_meta, addr, addr_size));
         *buf_count = 1;
         *buf = tmp;
         return (0);

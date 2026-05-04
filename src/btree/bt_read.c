@@ -405,6 +405,7 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
     }
 #ifdef HAVE_ANALYZE_CACHE
     assert(page && "Page uninitialized!?!");
+    assert((F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS) || block_meta.persistent_page_id != 0) && "ppid uninit?");
     page->persistent_page_id = block_meta.persistent_page_id;
 #endif
 
@@ -709,16 +710,16 @@ skip_evict:
 
 #ifdef HAVE_ANALYZE_CACHE
         // Check if we're in a metadata zone or not.
-        //if (!F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS)  ) 
-        //{
-        assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
-        if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+        if (!F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS) && page->dsk == 0 ) 
         {
-            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+            assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+            if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+            {
+                page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+            }
+            if (page->persistent_page_id != IAF_ID_UNINIT)
+                Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
         }
-        if (page->persistent_page_id != IAF_ID_UNINIT)
-            Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
-        //}
 #endif
 
             /*

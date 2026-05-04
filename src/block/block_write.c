@@ -203,7 +203,7 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     WT_UNUSED(block_meta);
     #ifdef HAVE_ANALYZE_CACHE
     //FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent
-    assert(block_meta && "Block metadata uninit!");
+    assert(block_meta != NULL && "Block metadata uninit!");
     assert(block->objectid == 0 && "Block id overwrite!");
     assert((uint32_t) block_meta->persistent_page_id == block_meta->persistent_page_id && "Persistent page id precision loss!");
     #endif
