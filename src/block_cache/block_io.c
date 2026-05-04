@@ -115,6 +115,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     const WT_PAGE_HEADER *dsk;
     size_t compression_ratio, result_len;
     uint64_t time_diff, time_start, time_stop;
+    uint32_t objectid;
     u_int count, i, results_count;
     bool blkcache_found, expect_conversion, found, skip_cache_put, timer;
 
@@ -129,6 +130,8 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     memset(results, 0, sizeof(results));
     results_count = 0;
 
+    WT_CLEAR(block_meta_tmp);
+
     WT_ASSERT_ALWAYS(session, session->dhandle != NULL, "The block cache requires a dhandle");
     /*
      * If anticipating a compressed or encrypted block, start with a scratch buffer and convert into
@@ -142,8 +145,16 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     }
 
     /* Check for mapped blocks. */
-    WT_RET(__wti_blkcache_map_read(session, ip, addr, addr_size, &found));
+
+    WT_RET(__wti_blkcache_map_read(session, ip, addr, addr_size, &found, &objectid));
     if (found) {
+        block_meta_tmp.persistent_page_id = objectid;
+        assert(block_meta != NULL && "No block meta!");
+        if (block_meta != NULL)
+        {
+            *block_meta = block_meta_tmp;
+            assert(block_meta->persistent_page_id != 0 && "Uninit blockmeta ppid!");
+        }
         skip_cache_put = true;
         if (!expect_conversion)
             goto verify;
@@ -199,8 +210,13 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
             WT_STAT_SESSION_INCRV(session, read_time, time_diff);
         }
 
+        assert(block_meta != NULL && "No block meta!");
         if (block_meta != NULL)
+        {
             *block_meta = block_meta_tmp;
+            assert(block_meta->persistent_page_id != 0 && "Uninit blockmeta ppid!");
+        }
+
 
         dsk = ip->data;
 
