@@ -130,8 +130,6 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     memset(results, 0, sizeof(results));
     results_count = 0;
 
-    WT_CLEAR(block_meta_tmp);
-
     WT_ASSERT_ALWAYS(session, session->dhandle != NULL, "The block cache requires a dhandle");
     /*
      * If anticipating a compressed or encrypted block, start with a scratch buffer and convert into
@@ -210,7 +208,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
             WT_STAT_SESSION_INCRV(session, read_time, time_diff);
         }
 
-        assert(block_meta != NULL && "No block meta!");
+        assert(block_meta != NULL || block_meta_tmp.persistent_page_id == 0 && "No block meta!");
         if (block_meta != NULL)
         {
             *block_meta = block_meta_tmp;
@@ -796,6 +794,13 @@ __wt_blkcache_write(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *
     delta_count = (block_meta == NULL) ? 0 : block_meta->delta_count;
     dsk = NULL;
     encrypted = false;
+
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+
+    if (block_meta == NULL)
+        block_meta = &block_meta_tmp;
+
 
     /* Optionally compress the data. */
     WT_ERR(__wt_blkcache_compress(session, buf, compressed, &ctmp, compressed_sizep, &compressed));
