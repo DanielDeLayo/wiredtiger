@@ -32,7 +32,8 @@ __wt_bm_read(WT_BM *bm, WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_ME
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
     #ifdef HAVE_ANALYZE_CACHE
     assert(block_meta && "Block metadata uninit!");
-    block_meta->persistent_page_id = objectid;
+    if (block_meta->persistent_page_id != IAF_ID_IGNORE)
+        block_meta->persistent_page_id = objectid;
     objectid = 0;
     #endif
 

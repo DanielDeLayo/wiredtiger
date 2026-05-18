@@ -421,6 +421,10 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
     uint8_t addr[WT_ADDR_MAX_COOKIE];
     bool eof, valid;
 
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+
     bm = S2BT(session)->bm;
     WT_ERR(__wt_scr_alloc(session, 0, &as));
     WT_ERR(__wt_scr_alloc(session, 0, &buf));
@@ -443,7 +447,7 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
          *
          * Report the block's status to the block manager.
          */
-        if ((ret = __wt_blkcache_read(session, buf, NULL, addr, addr_size)) == 0)
+        if ((ret = __wt_blkcache_read(session, buf, &block_meta_tmp, addr, addr_size)) == 0)
             valid = true;
         else {
             valid = false;
