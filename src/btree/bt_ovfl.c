@@ -19,6 +19,9 @@ __ovfl_read(WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_size, WT_
     const WT_PAGE_HEADER *dsk;
 
     btree = S2BT(session);
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
 
     /*
      * Read the overflow item from the block manager, then reference the start of the data and set
@@ -27,7 +30,7 @@ __ovfl_read(WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_size, WT_
      * Overflow reads are synchronous. That may bite me at some point, but WiredTiger supports large
      * page sizes, overflow items should be rare.
      */
-    WT_RET(__wt_blkcache_read(session, store, NULL, addr, addr_size));
+    WT_RET(__wt_blkcache_read(session, store, &block_meta_tmp, addr, addr_size));
     dsk = store->data;
     store->data = WT_PAGE_HEADER_BYTE(btree, dsk);
     store->size = dsk->u.datalen;
