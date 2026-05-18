@@ -208,7 +208,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
             WT_STAT_SESSION_INCRV(session, read_time, time_diff);
         }
 
-        assert(block_meta != NULL || block_meta_tmp.persistent_page_id == 0 && "No block meta!");
+        assert((block_meta != NULL || block_meta_tmp.persistent_page_id == 0) && "No block meta!");
         if (block_meta != NULL)
         {
             *block_meta = block_meta_tmp;
