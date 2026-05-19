@@ -1649,6 +1649,10 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
     int cmp;
     bool found;
 
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+
     btree = S2BT(session);
     page = NULL;
     found = false;
@@ -1679,7 +1683,7 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
      * the page into memory and we don't want page discard to free it.
      */
     WT_RET(__wt_scr_alloc(session, trk->trk_size, &dsk));
-    WT_ERR(__wt_blkcache_read(session, dsk, NULL, trk->trk_addr, trk->trk_addr_size));
+    WT_ERR(__wt_blkcache_read(session, dsk, &block_meta_tmp, trk->trk_addr, trk->trk_addr_size));
     WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, &page, NULL));
 
     /*
