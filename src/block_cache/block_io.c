@@ -156,7 +156,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
         if (block_meta != NULL)
         {
             *block_meta = block_meta_tmp;
-            block_meta->persistent_page_id = IAF_ID_IGNORE;
+            //block_meta->persistent_page_id = IAF_ID_IGNORE;
         }
         skip_cache_put = true;
         if (!expect_conversion)
@@ -217,7 +217,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
         if (block_meta != NULL)
         {
             *block_meta = block_meta_tmp;
-            block_meta->persistent_page_id = IAF_ID_IGNORE;    
+            //block_meta->persistent_page_id = IAF_ID_IGNORE;    
         }
 
 
@@ -809,7 +809,7 @@ __wt_blkcache_write(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *
 
     WT_PAGE_BLOCK_META block_meta_tmp;
     WT_CLEAR(block_meta_tmp);
-    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+    block_meta_tmp.persistent_page_id = IAF_ID_NEED_REINIT;
 
     if (block_meta == NULL)
         block_meta = &block_meta_tmp;
