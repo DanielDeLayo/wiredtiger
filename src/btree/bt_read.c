@@ -775,7 +775,7 @@ skip_evict:
 
 #ifdef HAVE_ANALYZE_CACHE
         // Check if we're in a metadata zone or not.
-        if (!F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS) && page->dsk == 0 ) 
+        if (!F_ISSET(session, WT_SESSION_INTERNAL) && page->dsk == 0 ) 
         {
             assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
             if (page->persistent_page_id == IAF_ID_NEED_REINIT)
