@@ -14,6 +14,12 @@
       __wt_atomic_load_uint32_relaxed(&(dhandle)->references) == 0)
 
 /*
+ * Grace period before closing an outdated checkpoint handle so the next generation can reuse its
+ * shared disk image.
+ */
+#define WT_DISAGG_OUTDATED_GRACE_SECS 5
+
+/*
  * __sweep_file_dhandle_check_and_reset_tod --
  *     Check if the file dhandle exists for the table dhandle and resets its time-of-death if it
  *     does.
@@ -97,6 +103,15 @@ __sweep_mark(WT_SESSION_IMPL *session, uint64_t now)
               session, ret == WT_NOTFOUND, "Connection dhandle find has returned an error.");
         }
 
+        /*
+         * Never close the layered dhandle. If sweep server removes the layered dhandle, it will not
+         * be processed when we drain the ingest table during step-up.
+         *
+         * FIXME-WT-16982: Optimization to close layered dhandles with empty ingest tables and on
+         * leader mode.
+         */
+        if (dhandle->type == WT_DHANDLE_TYPE_LAYERED)
+            continue;
         /*
          * Never close out the history store handle via sweep. It can cause a deadlock if eviction
          * needs to re-open a handle to the history store while a checkpoint is getting started.
@@ -182,7 +197,7 @@ __sweep_expire(WT_SESSION_IMPL *session, uint64_t now)
 
     TAILQ_FOREACH (dhandle, &conn->dhqh, q) {
         bool sweep_non_outdated_handle =
-          __wt_atomic_load_uint32_relaxed(&conn->open_btree_count) >= conn->sweep_handles_min;
+          __wt_atomic_load_uint32_relaxed(&conn->open_btree_count) >= conn->sweep.handles_min;
         /*
          * Ignore open files once the btree file count is below the minimum number of handles.
          */
@@ -192,16 +207,26 @@ __sweep_expire(WT_SESSION_IMPL *session, uint64_t now)
         if (!F_ISSET(dhandle, WT_DHANDLE_OUTDATED) && !sweep_non_outdated_handle)
             continue;
         /*
-         * Close outdated btrees immediately, even if they are metadata. For trees not marked with
-         * outdated, wait until the idle time has elapsed since time of death.
+         * For outdated btrees, hold standby node checkpoint handles for a short grace period,
+         * otherwise close them immediately. For trees not marked with outdated, wait until the idle
+         * time has elapsed since time of death.
          */
+        uint64_t tod = __wt_atomic_load_uint64_relaxed(&dhandle->timeofdeath);
         if (F_ISSET(dhandle, WT_DHANDLE_OUTDATED)) {
             if (__wt_atomic_load_int32_relaxed(&dhandle->session_inuse) > 0)
                 continue;
+            if (__wt_conn_is_disagg(session) && !conn->layered_table_manager.leader &&
+              WT_URI_IS_STABLE_CHECKPOINT(dhandle->name)) {
+                if (tod == 0) {
+                    __wt_atomic_store_uint64_relaxed(&dhandle->timeofdeath, now);
+                    continue;
+                }
+                if (now - tod <= WT_DISAGG_OUTDATED_GRACE_SECS)
+                    continue;
+            }
         } else if (WT_IS_METADATA(dhandle) || !F_ISSET(dhandle, WT_DHANDLE_OPEN) ||
-          __wt_atomic_load_int32_relaxed(&dhandle->session_inuse) != 0 ||
-          __wt_tsan_suppress_load_uint64(&dhandle->timeofdeath) == 0 ||
-          now - dhandle->timeofdeath <= conn->sweep_idle_time)
+          __wt_atomic_load_int32_relaxed(&dhandle->session_inuse) != 0 || tod == 0 ||
+          now - tod <= conn->sweep.idle_time)
             continue;
 
         /*
@@ -446,10 +471,10 @@ __sweep_server(void *arg)
     for (;;) {
         /* Wait until the next event. */
         if (FLD_ISSET(conn->timing_stress_flags, WT_TIMING_STRESS_AGGRESSIVE_SWEEP))
-            sweep_interval = conn->sweep_interval / 10;
+            sweep_interval = conn->sweep.interval / 10;
         else
-            sweep_interval = conn->sweep_interval;
-        __wt_cond_wait_signal(session, conn->sweep_cond, sweep_interval * WT_MILLION,
+            sweep_interval = conn->sweep.interval;
+        __wt_cond_wait_signal(session, conn->sweep.cond, sweep_interval * WT_MILLION,
           __sweep_server_run_chk, &cv_signalled);
 
         /* Check if we're quitting or being reconfigured. */
@@ -477,15 +502,15 @@ __sweep_server(void *arg)
          * Mark handles with a time of death, and report whether any handles are marked dead. If
          * sweep_idle_time is 0, handles never become idle.
          */
-        if (conn->sweep_idle_time != 0)
+        if (conn->sweep.idle_time != 0)
             __sweep_mark(session, now);
 
         /*
          * Close handles if we have reached the configured limit or in disaggregated storage. If
          * sweep_idle_time is 0, handles never become idle.
          */
-        if (conn->sweep_idle_time != 0 &&
-          (__wt_atomic_load_uint32_relaxed(&conn->open_btree_count) >= conn->sweep_handles_min ||
+        if (conn->sweep.idle_time != 0 &&
+          (__wt_atomic_load_uint32_relaxed(&conn->open_btree_count) >= conn->sweep.handles_min ||
             __wt_conn_is_disagg(session)))
             WT_ERR(__sweep_expire(session, now));
 
@@ -529,18 +554,18 @@ __wti_sweep_config(WT_SESSION_IMPL *session, const char *cfg[])
      * A non-zero idle time is incompatible with in-memory, and the default is non-zero; set the
      * in-memory configuration idle time to zero.
      */
-    conn->sweep_idle_time = 0;
+    conn->sweep.idle_time = 0;
     WT_RET(__wt_config_gets(session, cfg, "in_memory", &cval));
     if (cval.val == 0) {
         WT_RET(__wt_config_gets(session, cfg, "file_manager.close_idle_time", &cval));
-        conn->sweep_idle_time = (uint64_t)cval.val;
+        conn->sweep.idle_time = (uint64_t)cval.val;
     }
 
     WT_RET(__wt_config_gets(session, cfg, "file_manager.close_scan_interval", &cval));
-    conn->sweep_interval = (uint64_t)cval.val;
+    conn->sweep.interval = (uint64_t)cval.val;
 
     WT_RET(__wt_config_gets(session, cfg, "file_manager.close_handle_minimum", &cval));
-    conn->sweep_handles_min = (uint64_t)cval.val;
+    conn->sweep.handles_min = (uint64_t)cval.val;
 
     return (0);
 }
@@ -566,13 +591,13 @@ __wti_sweep_create(WT_SESSION_IMPL *session)
      */
     session_flags = WT_SESSION_CAN_WAIT | WT_SESSION_IGNORE_CACHE_SIZE;
     WT_RET(__wt_open_internal_session(
-      conn, "sweep-server", true, session_flags, 0, &conn->sweep_session));
-    session = conn->sweep_session;
+      conn, "sweep-server", true, session_flags, 0, &conn->sweep.session));
+    session = conn->sweep.session;
 
-    WT_RET(__wt_cond_alloc(session, "handle sweep server", &conn->sweep_cond));
+    WT_RET(__wt_cond_alloc(session, "handle sweep server", &conn->sweep.cond));
 
-    WT_RET(__wt_thread_create(session, &conn->sweep_tid, __sweep_server, session));
-    conn->sweep_tid_set = 1;
+    WT_RET(__wt_thread_create(session, &conn->sweep.tid, __sweep_server, session));
+    conn->sweep.tid_set = 1;
 
     return (0);
 }
@@ -590,17 +615,17 @@ __wti_sweep_destroy(WT_SESSION_IMPL *session)
     conn = S2C(session);
 
     FLD_CLR(conn->server_flags, WT_CONN_SERVER_SWEEP);
-    if (conn->sweep_tid_set) {
-        __wt_cond_signal(session, conn->sweep_cond);
-        WT_TRET(__wt_thread_join(session, &conn->sweep_tid));
-        conn->sweep_tid_set = 0;
+    if (conn->sweep.tid_set) {
+        __wt_cond_signal(session, conn->sweep.cond);
+        WT_TRET(__wt_thread_join(session, &conn->sweep.tid));
+        conn->sweep.tid_set = 0;
     }
-    __wt_cond_destroy(session, &conn->sweep_cond);
+    __wt_cond_destroy(session, &conn->sweep.cond);
 
-    if (conn->sweep_session != NULL) {
-        WT_TRET(__wt_session_close_internal(conn->sweep_session));
+    if (conn->sweep.session != NULL) {
+        WT_TRET(__wt_session_close_internal(conn->sweep.session));
 
-        conn->sweep_session = NULL;
+        conn->sweep.session = NULL;
     }
 
     return (ret);

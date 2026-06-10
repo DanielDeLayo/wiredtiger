@@ -248,6 +248,8 @@ configure_debug_mode(char **p, size_t max)
         CONFIG_APPEND(*p, ",checkpoint_retention=%" PRIu32, GV(DEBUG_CHECKPOINT_RETENTION));
     if (GV(DEBUG_CURSOR_REPOSITION))
         CONFIG_APPEND(*p, ",cursor_reposition=true");
+    if (GV(DEBUG_DISAGG_SLOW_TRUNCATE_FOLLOWER))
+        CONFIG_APPEND(*p, ",disagg_slow_truncate_follower=true");
     if (GV(DEBUG_EVICTION))
         CONFIG_APPEND(*p, ",eviction=true");
     /*
@@ -263,6 +265,8 @@ configure_debug_mode(char **p, size_t max)
         CONFIG_APPEND(*p, ",realloc_malloc=true");
     if (GV(DEBUG_SLOW_CHECKPOINT))
         CONFIG_APPEND(*p, ",slow_checkpoint=true");
+    if (GV(DEBUG_SLOW_TRUNCATE))
+        CONFIG_APPEND(*p, ",slow_truncate=true");
     if (GV(DEBUG_TABLE_LOGGING))
         CONFIG_APPEND(*p, ",table_logging=true");
     if (GV(DEBUG_UPDATE_RESTORE_EVICT))
@@ -392,30 +396,6 @@ configure_tiered_storage(const char *home, char **p, size_t max, char *ext_cfg, 
 }
 
 /*
- * configure_chunkcache --
- *     Configure chunk cache settings for opening a connection.
- */
-static void
-configure_chunkcache(char **p, size_t max)
-{
-    char chunkcache_ext_cfg[512];
-
-    if (GV(CHUNK_CACHE)) {
-        if (strcmp(GVS(CHUNK_CACHE_TYPE), "FILE") == 0)
-            testutil_snprintf(chunkcache_ext_cfg, sizeof(chunkcache_ext_cfg), "storage_path=%s,",
-              strcmp(GVS(CHUNK_CACHE_STORAGE_PATH), "off") != 0 ? GVS(CHUNK_CACHE_STORAGE_PATH) :
-                                                                  "WiredTigerChunkCache");
-        else
-            chunkcache_ext_cfg[0] = '\0';
-
-        CONFIG_APPEND(*p,
-          ",chunk_cache=(enabled=true,capacity=%" PRIu32 "MB,chunk_size=%" PRIu32 "MB,type=%s,%s)",
-          GV(CHUNK_CACHE_CAPACITY), GV(CHUNK_CACHE_CHUNK_SIZE), GVS(CHUNK_CACHE_TYPE),
-          chunkcache_ext_cfg);
-    }
-}
-
-/*
  * configure_prefetch --
  *     Configure prefetch settings for opening a connection. When enabled, this allows sessions to
  *     use the prefetch feature.
@@ -423,8 +403,8 @@ configure_chunkcache(char **p, size_t max)
 static void
 configure_prefetch(char **p, size_t max)
 {
-    if (GV(PREFETCH))
-        CONFIG_APPEND(*p, ",prefetch=(available=true,default=false)");
+    CONFIG_APPEND(*p, ",prefetch=(available=%s,default=%s)", GV(PREFETCH) ? "true" : "false",
+      GV(PREFETCH_DEFAULT) ? "true" : "false");
 }
 
 /*
@@ -536,6 +516,8 @@ create_database(const char *home, WT_CONNECTION **connp)
     if (GV(DISK_DATA_EXTEND))
         CONFIG_APPEND(p, ",file_extend=(data=8MB)");
 
+    CONFIG_APPEND(p, ",checkpoint_threads=%" PRIu32, GV(CHECKPOINT_THREADS));
+
     if (GV(PRECISE_CHECKPOINT))
         CONFIG_APPEND(p, ",precise_checkpoint=true");
 
@@ -557,9 +539,6 @@ create_database(const char *home, WT_CONNECTION **connp)
 
     /* Optional tiered storage. */
     configure_tiered_storage(home, &p, max, tiered_ext_cfg, sizeof(tiered_ext_cfg));
-
-    /* Optional chunk cache. */
-    configure_chunkcache(&p, max);
 
     /* Optional prefetch. */
     configure_prefetch(&p, max);
@@ -824,6 +803,8 @@ wts_open(const char *home, WT_CONNECTION **connp, bool verify_metadata)
             CONFIG_APPEND(p, ",%s", s);
         if (g.config_open != NULL)
             CONFIG_APPEND(p, ",%s", g.config_open);
+
+        CONFIG_APPEND(p, ",checkpoint_threads=%" PRIu32, GV(CHECKPOINT_THREADS));
 
         if (GV(PRECISE_CHECKPOINT))
             CONFIG_APPEND(p, ",precise_checkpoint=true");

@@ -134,7 +134,6 @@ static int __slvg_ovfl_reconcile(WT_SESSION_IMPL *, WT_STUFF *);
 static int __slvg_ovfl_ref(WT_SESSION_IMPL *, WT_TRACK *, bool);
 static int __slvg_ovfl_ref_all(WT_SESSION_IMPL *, WT_TRACK *);
 static int __slvg_read(WT_SESSION_IMPL *, WT_STUFF *);
-static int __slvg_reconcile_free(WT_BM *, WT_SESSION_IMPL *, const uint8_t *, size_t);
 static int __slvg_row_build_internal(WT_SESSION_IMPL *, uint32_t, WT_STUFF *);
 static int __slvg_row_build_leaf(WT_SESSION_IMPL *, WT_TRACK *, WT_REF *, WT_STUFF *);
 static int __slvg_row_ovfl(WT_SESSION_IMPL *, WT_TRACK *, WT_PAGE *, uint32_t, uint32_t);
@@ -477,7 +476,7 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
         case WT_PAGE_ROW_INT:
             __wt_verbose(session, WT_VERB_SALVAGE, "%s page ignored %s",
               __wt_page_type_string(dsk->type), (const char *)as->data);
-            WT_ERR(bm->free(bm, session, addr, addr_size));
+            WT_ERR(__wt_btree_block_free(session, addr, addr_size));
             continue;
         }
 
@@ -491,7 +490,7 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
         if (__wt_verify_dsk(session, as->data, buf) != 0) {
             __wt_verbose(session, WT_VERB_SALVAGE, "%s page failed verify %s",
               __wt_page_type_string(dsk->type), (const char *)as->data);
-            WT_ERR(bm->free(bm, session, addr, addr_size));
+            WT_ERR(__wt_btree_block_free(session, addr, addr_size));
             continue;
         }
 
@@ -620,7 +619,7 @@ __slvg_trk_leaf(WT_SESSION_IMPL *session, const WT_PAGE_HEADER *dsk, uint8_t *ad
          * Page flags are 0 because we aren't releasing the memory used to read the page into memory
          * and we don't want page discard to free it.
          */
-        WT_ERR(__wti_page_inmem(session, NULL, dsk, 0, &page, NULL));
+        WT_ERR(__wti_page_inmem(session, NULL, dsk, 0, NULL, &page, NULL));
         WT_ERR(__wt_row_leaf_key_copy(session, page, &page->pg_row[0], &trk->row_start));
         WT_ERR(
           __wt_row_leaf_key_copy(session, page, &page->pg_row[page->entries - 1], &trk->row_stop));
@@ -1200,17 +1199,12 @@ err:
 static int
 __slvg_col_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref)
 {
-    WT_BTREE *btree;
     WT_COL *save_col_var;
     WT_DECL_RET;
     WT_PAGE *page;
     WT_SALVAGE_COOKIE *cookie, _cookie;
     uint64_t recno, skip, take;
     uint32_t save_entries;
-    int (*saved_free)(WT_BM *, WT_SESSION_IMPL *, const uint8_t *, size_t);
-
-    btree = S2BT(session);
-    saved_free = NULL;
 
     cookie = &_cookie;
     WT_CLEAR(*cookie);
@@ -1272,8 +1266,6 @@ __slvg_col_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref)
      * need to adjust our list of overflow blocks so we don't free the overflow item twice.
      * Intercept any attempt by reconciliation to free blocks.
      */
-    saved_free = btree->bm->free;
-    btree->bm->free = __slvg_reconcile_free;
     session->salvage_track = trk;
 
     /* Write the new version of the leaf page to disk. */
@@ -1293,10 +1285,7 @@ __slvg_col_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref)
 err:
         WT_TRET(__wt_page_release(session, ref, 0));
     }
-    if (saved_free != NULL) {
-        btree->bm->free = saved_free;
-        session->salvage_track = NULL;
-    }
+    session->salvage_track = NULL;
 
     return (ret);
 }
@@ -1683,8 +1672,9 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
      * the page into memory and we don't want page discard to free it.
      */
     WT_RET(__wt_scr_alloc(session, trk->trk_size, &dsk));
-    WT_ERR(__wt_blkcache_read(session, dsk, &block_meta_tmp, trk->trk_addr, trk->trk_addr_size));
-    WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, &page, NULL));
+    WT_ERR(__wt_blkcache_read(session, dsk, NULL, trk->trk_addr, trk->trk_addr_size));
+    WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, NULL, &page, NULL));
+
 
     /*
      * Walk the page, looking for a key sorting greater than the specified stop key -- that's our
@@ -1831,11 +1821,10 @@ __slvg_row_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref, WT_S
     WT_ROW *rip;
     WT_SALVAGE_COOKIE *cookie, _cookie;
     uint32_t i, skip_start, skip_stop;
-    int cmp, (*saved_free)(WT_BM *, WT_SESSION_IMPL *, const uint8_t *, size_t);
+    int cmp;
 
     btree = S2BT(session);
     page = NULL;
-    saved_free = NULL;
 
     cookie = &_cookie;
     WT_CLEAR(*cookie);
@@ -1932,8 +1921,6 @@ __slvg_row_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref, WT_S
      * reconcile removes the overflow key, the second build/reconcile will fail when it can't read
      * the key. Intercept any attempt by reconciliation to free blocks.
      */
-    saved_free = btree->bm->free;
-    btree->bm->free = __slvg_reconcile_free;
     session->salvage_track = trk;
 
     /* Write the new version of the leaf page to disk. */
@@ -1952,10 +1939,7 @@ __slvg_row_build_leaf(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_REF *ref, WT_S
 err:
         WT_TRET(__wt_page_release(session, ref, 0));
     }
-    if (saved_free != NULL) {
-        btree->bm->free = saved_free;
-        session->salvage_track = NULL;
-    }
+    session->salvage_track = NULL;
     __wt_scr_free(session, &key);
 
     return (ret);
@@ -2018,16 +2002,16 @@ __slvg_row_ovfl(
 }
 
 /*
- * __slvg_reconcile_free --
- *     Block manager replacement to update blocks reconciliation wants removed.
+ * __wt_slvg_reconcile_free --
+ *     Intercept block frees during salvage reconciliation, updating the overflow tracking list
+ *     rather than actually freeing blocks.
  */
-static int
-__slvg_reconcile_free(WT_BM *bm, WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_size)
+int
+__wt_slvg_reconcile_free(WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_size)
 {
     WT_TRACK *ovfl, *trk;
     uint32_t i;
 
-    WT_UNUSED(bm);
     trk = session->salvage_track;
 
     /*
@@ -2401,10 +2385,6 @@ __slvg_trk_free_addr(WT_SESSION_IMPL *session, WT_TRACK *trk)
 static int
 __slvg_trk_free_block(WT_SESSION_IMPL *session, WT_TRACK *trk)
 {
-    WT_BM *bm;
-
-    bm = S2BT(session)->bm;
-
     /*
      * If freeing underlying file blocks or overflow pages, this is a page we were tracking but
      * eventually decided not to use.
@@ -2412,7 +2392,7 @@ __slvg_trk_free_block(WT_SESSION_IMPL *session, WT_TRACK *trk)
     __wt_verbose(session, WT_VERB_SALVAGE, "%s blocks discarded: discard freed file bytes %" PRIu32,
       __wt_addr_string(session, trk->trk_addr, trk->trk_addr_size, trk->ss->tmp1), trk->trk_size);
 
-    return (bm->free(bm, session, trk->trk_addr, trk->trk_addr_size));
+    return (__wt_btree_block_free(session, trk->trk_addr, trk->trk_addr_size));
 }
 
 /*
