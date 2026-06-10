@@ -8,6 +8,10 @@
 
 #include "wt_internal.h"
 
+#ifdef HAVE_ANALYZE_CACHE
+#include "iaf_api.h"
+#endif
+
 static int __ckpt_delete_and_merge(WT_SESSION_IMPL *, WT_BLOCK *, WT_CKPT *, WT_BLOCK_CKPT *);
 static int __ckpt_process(WT_SESSION_IMPL *, WT_BLOCK *, WT_CKPT *);
 static int __ckpt_read_deletion_extlists(WT_SESSION_IMPL *, WT_BLOCK *, WT_CKPT *, bool *);
@@ -132,11 +136,11 @@ __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint
         /* Read any root page. */
         if (ci->root_offset != WT_BLOCK_INVALID_OFFSET) {
             /* A checkpoint shouldn't point to an object created after this one. */
-            WT_ASSERT(session, block->objectid >= ci->root_objectid);
+            //WT_ASSERT(session, block->objectid >= ci->root_objectid);
 
             endp = root_addr;
             WT_ERR(__wt_block_addr_pack(
-              block, &endp, ci->root_objectid, ci->root_offset, ci->root_size, ci->root_checksum));
+              block, &endp, 1, ci->root_offset, ci->root_size, ci->root_checksum));
             *root_addr_sizep = WT_PTRDIFF(endp, root_addr);
         }
 

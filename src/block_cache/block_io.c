@@ -115,6 +115,7 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     const WT_PAGE_HEADER *dsk;
     size_t compression_ratio, result_len;
     uint64_t time_diff, time_start, time_stop;
+    uint32_t objectid;
     u_int count, i, results_count;
     bool blkcache_found, expect_conversion, found, skip_cache_put, timer;
 
@@ -128,6 +129,8 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     skip_cache_put = (blkcache->type == WT_BLKCACHE_UNCONFIGURED);
     memset(results, 0, sizeof(results));
     results_count = 0;
+
+    WT_CLEAR(block_meta_tmp);
 
     WT_ASSERT_ALWAYS(session, session->dhandle != NULL, "The block cache requires a dhandle");
     /*
@@ -146,8 +149,15 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     }
 
     /* Check for mapped blocks. */
-    WT_RET(__wti_blkcache_map_read(session, ip, addr, addr_size, &found));
+
+    WT_RET(__wti_blkcache_map_read(session, ip, addr, addr_size, &found, &objectid));
     if (found) {
+        assert(block_meta != NULL && "No block meta!");
+        if (block_meta != NULL)
+        {
+            *block_meta = block_meta_tmp;
+            block_meta->persistent_page_id = IAF_ID_IGNORE;
+        }
         skip_cache_put = true;
         if (!expect_conversion)
             goto verify;
@@ -203,8 +213,14 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
             WT_STAT_SESSION_INCRV(session, read_time, time_diff);
         }
 
+        assert(block_meta != NULL && "No block meta!");
         if (block_meta != NULL)
+        {
             *block_meta = block_meta_tmp;
+            block_meta->persistent_page_id = IAF_ID_IGNORE;    
+        }
+
+
 
         dsk = ip->data;
 
@@ -447,7 +463,7 @@ __wt_blkcache_read_multi(WT_SESSION_IMPL *session, WT_ITEM **buf, size_t *buf_co
          * FIXME-WT-14717: we used to read garbage values for block meta from the block cache for
          * non-disaggregated case. It's unclear if we still do -- pass a NULL for now.
          */
-        WT_ERR(__wt_blkcache_read(session, &tmp[0], NULL, addr, addr_size));
+        WT_ERR(__wt_blkcache_read(session, &tmp[0], block_meta, addr, addr_size));
         *buf_count = 1;
         *buf = tmp;
         return (0);
@@ -790,6 +806,14 @@ __wt_blkcache_write(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *
     delta_count = (block_meta == NULL) ? 0 : block_meta->delta_count;
     dsk = NULL;
     encrypted = false;
+
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+
+    if (block_meta == NULL)
+        block_meta = &block_meta_tmp;
+
 
     /* Optionally compress the data. */
     WT_ERR(__wt_blkcache_compress(session, buf, compressed, &ctmp, compressed_sizep, &compressed));

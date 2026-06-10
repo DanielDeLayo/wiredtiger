@@ -1354,6 +1354,11 @@ err:
     /* We no longer have a session, don't try to update it. */
     session = NULL;
 
+    #ifdef HAVE_ANALYZE_CACHE
+    //Iaf_print(conn->iaf);
+    Iaf_destroy(&(conn->iaf));
+    #endif
+
     API_END_RET_NOTFOUND_MAP(session, ret);
 }
 
@@ -3293,6 +3298,10 @@ wiredtiger_open(const char *home, WT_EVENT_HANDLER *event_handler, const char *c
 
     WT_RET(__wt_calloc_one(NULL, &conn));
     conn->iface = stdc;
+
+    #ifdef HAVE_ANALYZE_CACHE
+    conn->iaf = Iaf_create(0, 1000000);
+    #endif
 
     /*
      * Immediately link the structure into the connection structure list: the only thing ever looked

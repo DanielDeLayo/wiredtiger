@@ -140,6 +140,20 @@ if(HAVE_UNITTEST)
     FetchContent_MakeAvailable(Catch2)
 endif()
 
+if(HAVE_ANALYZE_CACHE)
+    include(FetchContent)
+
+    FetchContent_Declare(
+        IAF
+        GIT_REPOSITORY https://github.com/etwest/Increment-and-Freeze.git
+        GIT_TAG sampling
+        GIT_SHALLOW    TRUE
+    )
+
+    FetchContent_MakeAvailable(IAF)
+    set_property(TARGET IAF PROPERTY POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # Enable CTest. Subsequent targets may additionally define their own ctest definitions.
 enable_testing()
 include(test/ctest_helpers.cmake)
@@ -202,6 +216,9 @@ if(WITH_PIC OR ENABLE_SHARED)
         ${CMAKE_CURRENT_BINARY_DIR}/config
         ${CMAKE_CURRENT_LIST_DIR}/src/include
     )
+    if(HAVE_ANALYZE_CACHE)
+        target_link_libraries(wt_objs PUBLIC IAF::IAF)
+    endif()
     # Append any provided C flags.
     if(COMPILER_DIAGNOSTIC_C_FLAGS)
         target_compile_options(wt_objs PRIVATE ${COMPILER_DIAGNOSTIC_C_FLAGS})

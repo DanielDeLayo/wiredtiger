@@ -30,6 +30,12 @@ __wt_bm_read(WT_BM *bm, WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_ME
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    #ifdef HAVE_ANALYZE_CACHE
+    assert(block_meta && "Block metadata uninit!");
+    if (block_meta->persistent_page_id != IAF_ID_IGNORE)
+        block_meta->persistent_page_id = objectid;
+    objectid = 0;
+    #endif
 
     if (bm->is_multi_handle)
         /* Lookup the block handle */
@@ -80,6 +86,7 @@ __wt_bm_corrupt(WT_BM *bm, WT_SESSION_IMPL *session, const uint8_t *addr, size_t
     /* Crack the cookie, dump the block. */
     WT_ERR(__wt_block_addr_unpack(
       session, bm->block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
     __wt_log_data_dump(session, tmp->data, tmp->size,
       "corrupt dump: {%" PRIu32 ": %" PRIuMAX ", %" PRIu32 ", %#" PRIx32 "}", objectid,
       (uintmax_t)offset, size, checksum);

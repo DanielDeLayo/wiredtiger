@@ -10,6 +10,10 @@
 #include "reconcile_private.h"
 #include "reconcile_inline.h"
 
+#ifdef HAVE_ANANLYZE_CACHE
+#include "iaf_api.h"
+#endif
+
 static int __rec_cleanup(WT_SESSION_IMPL *, WTI_RECONCILE *);
 static int __rec_destroy(WT_SESSION_IMPL *, void *);
 static int __rec_destroy_session(WT_SESSION_IMPL *);
@@ -2325,6 +2329,9 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
 {
     WT_MULTI *multi;
     WT_PAGE *page;
+    #ifdef HAVE_ANALYZE_CACHE
+    WT_PAGE_BLOCK_META block_meta_init;
+    #endif
     WT_PAGE_BLOCK_META *block_meta;
 
     page = r->page;
@@ -2350,7 +2357,20 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
         } else
             __wt_page_block_meta_assign(session, multi->block_meta);
     }
-    WT_RET(__rec_write(session, &chunk->image, multi->block_meta, addr, addr_sizep,
+#ifdef HAVE_ANALYZE_CACHE
+    //assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!");
+    if (multi->block_meta == NULL)
+    { 
+        __wt_page_block_meta_assign(session, &block_meta_init);
+        block_meta = & block_meta_init;
+    }
+    else {
+        block_meta = multi->block_meta;
+    }
+    //TODO FIXME Follow the logic of the page ids above
+    block_meta->persistent_page_id = page->persistent_page_id;
+#endif
+    WT_RET(__rec_write(session, &chunk->image, block_meta, addr, addr_sizep,
       compressed_sizep, false, F_ISSET(r, WT_REC_CHECKPOINT), false));
 
     if (F_ISSET(r->ref, WT_REF_FLAG_INTERNAL))

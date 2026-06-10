@@ -454,6 +454,12 @@ skip_disk_read:
         page->disagg_info->old_rec_lsn_max = block_meta.disagg_lsn;
         page->disagg_info->rec_lsn_max = block_meta.disagg_lsn;
     }
+#ifdef HAVE_ANALYZE_CACHE
+    assert(page && "Page uninitialized!?!");
+    assert((F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS) || block_meta.persistent_page_id != 0) && "ppid uninit?");
+    page->persistent_page_id = block_meta.persistent_page_id;
+#endif
+
     if (!page_change && instantiate_upd && !WT_IS_HS(session->dhandle))
         WT_ERR(__wti_page_inmem_updates(session, ref));
 
@@ -747,7 +753,7 @@ skip_evict:
             page = ref->page;
             WT_ASSERT(session, page != NULL);
 
-            /*
+            /*   T
              * Keep track of whether a session is reading leaf pages into the cache. This allows for
              * the session to decide whether pre-fetch would be helpful. It might not work if a
              * session has multiple cursors on different tables open, since the operations on
@@ -766,6 +772,20 @@ skip_evict:
             }
 
             __wt_evict_touch_page(session, page, LF_ISSET(WT_READ_INTERNAL_OP), wont_need);
+
+#ifdef HAVE_ANALYZE_CACHE
+        // Check if we're in a metadata zone or not.
+        if (!F_ISSET(session, WT_SESSION_INTERNAL | WT_SESSION_CACHE_CURSORS) && page->dsk == 0 ) 
+        {
+            assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+            if (page->persistent_page_id == IAF_ID_NEED_REINIT)
+            {
+                page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+            }
+            if (page->persistent_page_id != IAF_ID_UNINIT)
+                Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
+        }
+#endif
 
             /*
              * Check if we need an autocommit transaction. Starting a transaction can trigger

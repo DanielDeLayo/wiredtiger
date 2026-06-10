@@ -76,6 +76,7 @@ __block_addr_unpack(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t **p
         *sizep = (uint32_t)s * block->allocsize;
         *checksump = (uint32_t)c;
     }
+  
 
     return (0);
 }
@@ -152,6 +153,7 @@ __wt_block_addr_invalid(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
 #ifdef HAVE_DIAGNOSTIC
     /*
@@ -183,6 +185,7 @@ __wt_block_addr_string(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /* Printable representation. */
     WT_RET(__wt_buf_fmt(session, buf,

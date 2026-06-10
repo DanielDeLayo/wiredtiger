@@ -8,10 +8,14 @@
 
 #pragma once
 
+#ifdef HAVE_ANALYZE_CACHE
+    #include "iaf_api.h"
+#endif
+
 /*******************************************
  * Global per-process structure.
  *******************************************/
-/*
+/*  
  * WT_PROCESS --
  *	Per-process information for the library.
  */
@@ -856,6 +860,10 @@ struct __wt_conn_evict_config {
  */
 struct __wt_connection_impl {
     WT_CONNECTION iface;
+
+    #ifdef HAVE_ANALYZE_CACHE
+    Iaf iaf;
+    #endif
 
     /* For operations without an application-supplied session */
     wt_shared WT_SESSION_IMPL *default_session;

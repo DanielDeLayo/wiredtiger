@@ -33,6 +33,10 @@ add_library(cppsuite_test_harness STATIC
     src/util/options_parser.cpp
 )
 
+if(HAVE_ANALYZE_CACHE)
+    target_link_libraries(cppsuite_test_harness PUBLIC IAF::IAF)
+endif()
+
 target_include_directories(cppsuite_test_harness PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(
     cppsuite_test_harness

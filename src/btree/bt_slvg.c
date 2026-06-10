@@ -420,6 +420,10 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
     uint8_t addr[WT_ADDR_MAX_COOKIE];
     bool eof, valid;
 
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+
     bm = S2BT(session)->bm;
     WT_ERR(__wt_scr_alloc(session, 0, &as));
     WT_ERR(__wt_scr_alloc(session, 0, &buf));
@@ -442,7 +446,7 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
          *
          * Report the block's status to the block manager.
          */
-        if ((ret = __wt_blkcache_read(session, buf, NULL, addr, addr_size)) == 0)
+        if ((ret = __wt_blkcache_read(session, buf, &block_meta_tmp, addr, addr_size)) == 0)
             valid = true;
         else {
             valid = false;
@@ -1634,6 +1638,10 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
     int cmp;
     bool found;
 
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+
     btree = S2BT(session);
     page = NULL;
     found = false;
@@ -1665,7 +1673,8 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
      */
     WT_RET(__wt_scr_alloc(session, trk->trk_size, &dsk));
     WT_ERR(__wt_blkcache_read(session, dsk, NULL, trk->trk_addr, trk->trk_addr_size));
-    WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, NULL, &page, NULL));
+    WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, &page, NULL));
+
 
     /*
      * Walk the page, looking for a key sorting greater than the specified stop key -- that's our

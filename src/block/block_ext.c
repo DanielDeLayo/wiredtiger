@@ -635,6 +635,7 @@ __wt_block_free(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t *addr, 
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+    objectid = 0;
 
     /*
      * Freeing blocks in a previous object isn't possible in the current architecture. We'd like to

@@ -1282,8 +1282,11 @@ __verify_overflow(WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_siz
     __wt_verbose_debug3(session, WT_VERB_VERIFY, "read overflow page at: %s",
       __wt_addr_string(session, addr, addr_size, vs->tmp1));
 
+    WT_PAGE_BLOCK_META block_meta_tmp;
+    WT_CLEAR(block_meta_tmp);
+    block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
     /* Read and verify the overflow item. */
-    WT_RET(__wt_blkcache_read(session, vs->tmp1, NULL, addr, addr_size));
+    WT_RET(__wt_blkcache_read(session, vs->tmp1, &block_meta_tmp, addr, addr_size));
 
     /*
      * The physical page has already been verified, but we haven't confirmed it was an overflow

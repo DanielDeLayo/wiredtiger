@@ -41,6 +41,10 @@ target_include_directories(
 )
 target_link_libraries(workgen_cpp test_util Python3::Python)
 
+if(HAVE_ANALYZE_CACHE)
+    target_link_libraries(workgen_cpp IAF::IAF)
+endif()
+
 # For some reason, libstdc++ symbols collide when running workgen under the V5 toolchain 
 # on armv9 machines. Therefore prevent symbols from being exported inside the workgen cpp
 # library as a workaround. 
