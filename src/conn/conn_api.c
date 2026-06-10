@@ -1355,8 +1355,10 @@ err:
     session = NULL;
 
     #ifdef HAVE_ANALYZE_CACHE
-    Iaf_print(conn->iaf);
-    Iaf_destroy(&(conn->iaf));
+    if (conn->iaf != NULL) {
+        Iaf_print(conn->iaf);
+        Iaf_destroy(&(conn->iaf));
+    }
     #endif
 
     API_END_RET_NOTFOUND_MAP(session, ret);
