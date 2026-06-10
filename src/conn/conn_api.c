@@ -1355,7 +1355,7 @@ err:
     session = NULL;
 
     #ifdef HAVE_ANALYZE_CACHE
-    //Iaf_print(conn->iaf);
+    Iaf_print(conn->iaf);
     Iaf_destroy(&(conn->iaf));
     #endif
 
