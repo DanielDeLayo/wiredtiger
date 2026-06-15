@@ -1349,17 +1349,17 @@ err:
       conn->shutdown_timeline.shutdown_ms, conn->shutdown_timeline.rts_ms,
       conn->shutdown_timeline.checkpoint_ms);
 
-    WT_TRET(__wti_connection_close(conn));
-
-    /* We no longer have a session, don't try to update it. */
-    session = NULL;
-
     #ifdef HAVE_ANALYZE_CACHE
     if (conn->iaf != NULL) {
         Iaf_print(conn->iaf);
         Iaf_destroy(&(conn->iaf));
     }
     #endif
+
+    WT_TRET(__wti_connection_close(conn));
+
+    /* We no longer have a session, don't try to update it. */
+    session = NULL;
 
     API_END_RET_NOTFOUND_MAP(session, ret);
 }

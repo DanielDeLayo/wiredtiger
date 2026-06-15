@@ -782,7 +782,7 @@ skip_evict:
             {
                 page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
             }
-            if (page->persistent_page_id != IAF_ID_UNINIT)
+            if (S2C(session)->iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT)
                 Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
         }
 #endif
