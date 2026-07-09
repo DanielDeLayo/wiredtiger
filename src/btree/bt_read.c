@@ -7,6 +7,7 @@
  */
 
 #include "wt_internal.h"
+#include "verbose.h"
 
 /*
  * Define functions that increment histogram statistics for reconstruction of pages with deltas.
@@ -777,13 +778,18 @@ skip_evict:
         // Check if we're in a metadata zone or not.
         if (true) 
         {
+            Iaf iaf = S2C(session)->iaf;
             assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
             if (page->persistent_page_id == IAF_ID_NEED_REINIT)
             {
-                page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+                page->persistent_page_id = Iaf_grab_id(iaf);
             }
-            if (S2C(session)->iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT)
-                Iaf_write(S2C(session)->iaf, (void*)(page->persistent_page_id));
+            if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT) {
+                bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
+                if (should_print)
+                    __wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+            }
+                
         }
 #endif
 
