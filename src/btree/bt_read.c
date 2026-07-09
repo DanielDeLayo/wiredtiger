@@ -786,8 +786,10 @@ skip_evict:
             }
             if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT) {
                 bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
-                if (should_print)
-                    __wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+                if (should_print) {
+                    //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+                    __wt_verbose_error(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+                }
             }
                 
         }
