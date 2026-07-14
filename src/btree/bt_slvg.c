@@ -422,7 +422,9 @@ __slvg_read(WT_SESSION_IMPL *session, WT_STUFF *ss)
 
     WT_PAGE_BLOCK_META block_meta_tmp;
     WT_CLEAR(block_meta_tmp);
+#ifdef HAVE_ANALYZE_CACHE
     block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+#endif
 
     bm = S2BT(session)->bm;
     WT_ERR(__wt_scr_alloc(session, 0, &as));

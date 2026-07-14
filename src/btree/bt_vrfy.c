@@ -1284,7 +1284,9 @@ __verify_overflow(WT_SESSION_IMPL *session, const uint8_t *addr, size_t addr_siz
 
     WT_PAGE_BLOCK_META block_meta_tmp;
     WT_CLEAR(block_meta_tmp);
+#ifdef HAVE_ANALYZE_CACHE
     block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+#endif
     /* Read and verify the overflow item. */
     WT_RET(__wt_blkcache_read(session, vs->tmp1, &block_meta_tmp, addr, addr_size));
 

@@ -776,22 +776,21 @@ skip_evict:
 
 #ifdef HAVE_ANALYZE_CACHE
         // Check if we're in a metadata zone or not.
-        if (true) 
+
+        Iaf iaf = S2C(session)->iaf;
+        assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
+        if (page->persistent_page_id == IAF_ID_NEED_REINIT)
         {
-            Iaf iaf = S2C(session)->iaf;
-            assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
-            if (page->persistent_page_id == IAF_ID_NEED_REINIT)
-            {
-                page->persistent_page_id = Iaf_grab_id(iaf);
+            page->persistent_page_id = Iaf_grab_id(iaf);
+        }
+        // If the page has a valid persistent_page_id, write it to the IAF algorithm. This is used for analyzing cache behavior and eviction patterns.
+        if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT) {
+            bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
+            // Whenever the IAF algorithm indicates that we should print, log the current state for debugging purposes.
+            if (should_print) {
+                //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+                __wt_verbose_error(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
             }
-            if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT) {
-                bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
-                if (should_print) {
-                    //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
-                    __wt_verbose_error(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
-                }
-            }
-                
         }
 #endif
 
