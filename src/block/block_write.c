@@ -9,6 +9,10 @@
 #include "wt_internal.h"
 #include <stdint.h>
 
+#ifdef HAVE_ANALYZE_CACHE
+#include "iaf_api.h"
+#endif
+
 /*
  * __wti_block_truncate --
  *     Truncate the file.
@@ -205,7 +209,9 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     //FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent
     assert(block_meta != NULL && "Block metadata uninit!");
     assert(block->objectid == 0 && "Block id overwrite!");
-    assert((uint32_t) block_meta->persistent_page_id == block_meta->persistent_page_id && "Persistent page id precision loss!");
+    if (block_meta != NULL && block_meta->persistent_page_id > UINT32_MAX) {
+        block_meta->persistent_page_id = IAF_PAGE_OVERFLOW;
+    }
     #endif
 
     WT_RET(__wti_block_write_off(
