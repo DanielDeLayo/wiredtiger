@@ -219,6 +219,13 @@ __wti_connection_close(WT_CONNECTION_IMPL *conn)
     /* Destroy any precompiled configuration. */
     __wt_conf_compile_discard(session);
 
+    #ifdef HAVE_ANALYZE_CACHE
+    if (conn->iaf != NULL) {
+        Iaf_print(conn->iaf);
+        Iaf_destroy(&(conn->iaf));
+    }
+    #endif
+
     /* Destroy the handle. */
     __wti_connection_destroy(conn);
 

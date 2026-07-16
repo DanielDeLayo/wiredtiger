@@ -1349,12 +1349,7 @@ err:
       conn->shutdown_timeline.shutdown_ms, conn->shutdown_timeline.rts_ms,
       conn->shutdown_timeline.checkpoint_ms);
 
-    #ifdef HAVE_ANALYZE_CACHE
-    if (conn->iaf != NULL) {
-        Iaf_print(conn->iaf);
-        Iaf_destroy(&(conn->iaf));
-    }
-    #endif
+
 
     WT_TRET(__wti_connection_close(conn));
 

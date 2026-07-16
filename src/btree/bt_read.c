@@ -789,8 +789,10 @@ skip_evict:
                 bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
                 // Whenever the IAF algorithm indicates that we should print, log the current state for debugging purposes.
                 if (should_print) {
-                    //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
-                    __wt_verbose_error(session, WT_VERB_EVICTION, "%s", Iaf_stringify(iaf));
+                    char *iaf_str = Iaf_stringify(iaf);
+                    //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str);
+                    __wt_verbose_error(session, WT_VERB_EVICTION, "%s", iaf_str);
+                    free(iaf_str);
                 }
             }
         }
