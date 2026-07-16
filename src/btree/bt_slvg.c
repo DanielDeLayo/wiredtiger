@@ -1642,7 +1642,9 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
 
     WT_PAGE_BLOCK_META block_meta_tmp;
     WT_CLEAR(block_meta_tmp);
+#ifdef HAVE_ANALYZE_CACHE
     block_meta_tmp.persistent_page_id = IAF_ID_IGNORE;
+#endif
 
     btree = S2BT(session);
     page = NULL;

@@ -218,7 +218,11 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
       session, block, buf, &offset, &size, &checksum, data_checksum, checkpoint_io, false));
 
     endp = addr;
+#ifdef HAVE_ANALYZE_CACHE
     WT_RET(__wt_block_addr_pack(block, &endp, (uint32_t) block_meta->persistent_page_id, offset, size, checksum));
+#else
+    WT_RET(__wt_block_addr_pack(block, &endp, block->objectid, offset, size, checksum));
+#endif
     *addr_sizep = WT_PTRDIFF(endp, addr);
 
     return (0);
