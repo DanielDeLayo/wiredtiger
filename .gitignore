@@ -30,3 +30,5 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/agent-memory-local/
 .claude/worktrees/
+
+WT_TEST
