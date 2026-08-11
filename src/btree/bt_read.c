@@ -785,14 +785,14 @@ skip_evict:
                 page->persistent_page_id = Iaf_grab_id(iaf);
             }
             // If the page has a valid persistent_page_id, write it to the IAF algorithm. This is used for analyzing cache behavior and eviction patterns.
-            if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT) {
-                bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id));    
+            if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT && !LF_ISSET(WT_READ_CACHE)) {
+                bool should_print = Iaf_write(iaf, (void*)(page->persistent_page_id), page->memory_footprint);    
                 // Whenever the IAF algorithm indicates that we should print, log the current state for debugging purposes.
                 if (should_print) {
                     char *iaf_str = Iaf_stringify(iaf);
                     //__wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str);
                     __wt_verbose_error(session, WT_VERB_EVICTION, "%s", iaf_str);
-                    free(iaf_str);
+                    Iaf_free_string(iaf_str);
                 }
             }
         }
