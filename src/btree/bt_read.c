@@ -786,7 +786,8 @@ skip_evict:
                 if (page->persistent_page_id == IAF_ID_NEED_REINIT) {
                     page->persistent_page_id = Iaf_grab_id(iaf);
                 }
-                /* If the page has a valid persistent_page_id, write it to the IAF algorithm. This */
+                /* If the page has a valid persistent_page_id, write it to the IAF algorithm. This
+                 */
                 /* is used for analyzing cache behavior and eviction patterns. */
                 if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT &&
                   !LF_ISSET(WT_READ_CACHE)) {
