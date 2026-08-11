@@ -178,7 +178,7 @@ __wt_block_salvage_valid(
      */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
-      objectid = 0;
+    objectid = 0;
     if (valid)
         block->slvg_off = offset + size;
     else {

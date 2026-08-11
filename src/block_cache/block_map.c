@@ -81,8 +81,8 @@ __wti_blkcache_unmap(WT_SESSION_IMPL *session, WT_BLOCK *block, void *mapped_reg
  *     Map address cookie referenced block into a buffer.
  */
 int
-__wti_blkcache_map_read(
-  WT_SESSION_IMPL *session, WT_ITEM *buf, const uint8_t *addr, size_t addr_size, bool *foundp, uint32_t* objectidp)
+__wti_blkcache_map_read(WT_SESSION_IMPL *session, WT_ITEM *buf, const uint8_t *addr,
+  size_t addr_size, bool *foundp, uint32_t *objectidp)
 {
     WT_BLOCK *block;
     WT_BM *bm;
@@ -107,11 +107,9 @@ __wti_blkcache_map_read(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
     if (objectidp != NULL)
         *objectidp = objectid;
-        
-      //objectid = 0;
 
     /* Not supported on multi-handle trees */
-    //WT_ASSERT(session, block->objectid == objectid);
+    /* WT_ASSERT(session, block->objectid == objectid); */
 
     /* Map the block if it's possible. */
     handle = block->fh->handle;

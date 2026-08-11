@@ -76,7 +76,6 @@ __block_addr_unpack(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t **p
         *sizep = (uint32_t)s * block->allocsize;
         *checksump = (uint32_t)c;
     }
-  
 
     return (0);
 }

@@ -205,21 +205,22 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     uint8_t *endp;
 
     WT_UNUSED(block_meta);
-    #ifdef HAVE_ANALYZE_CACHE
-    //FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent
+#ifdef HAVE_ANALYZE_CACHE
+    /* FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent */
     assert(block_meta != NULL && "Block metadata uninit!");
     assert(block->objectid == 0 && "Block id overwrite!");
     if (block_meta != NULL && block_meta->persistent_page_id > UINT32_MAX) {
         block_meta->persistent_page_id = IAF_PAGE_OVERFLOW;
     }
-    #endif
+#endif
 
     WT_RET(__wti_block_write_off(
       session, block, buf, &offset, &size, &checksum, data_checksum, checkpoint_io, false));
 
     endp = addr;
 #ifdef HAVE_ANALYZE_CACHE
-    WT_RET(__wt_block_addr_pack(block, &endp, (uint32_t) block_meta->persistent_page_id, offset, size, checksum));
+    WT_RET(__wt_block_addr_pack(
+      block, &endp, (uint32_t)block_meta->persistent_page_id, offset, size, checksum));
 #else
     WT_RET(__wt_block_addr_pack(block, &endp, block->objectid, offset, size, checksum));
 #endif

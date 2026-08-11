@@ -1349,8 +1349,6 @@ err:
       conn->shutdown_timeline.shutdown_ms, conn->shutdown_timeline.rts_ms,
       conn->shutdown_timeline.checkpoint_ms);
 
-
-
     WT_TRET(__wti_connection_close(conn));
 
     /* We no longer have a session, don't try to update it. */
@@ -3296,9 +3294,9 @@ wiredtiger_open(const char *home, WT_EVENT_HANDLER *event_handler, const char *c
     WT_RET(__wt_calloc_one(NULL, &conn));
     conn->iface = stdc;
 
-    #ifdef HAVE_ANALYZE_CACHE
+#ifdef HAVE_ANALYZE_CACHE
     conn->iaf = Iaf_create(0, 1000000);
-    #endif
+#endif
 
     /*
      * Immediately link the structure into the connection structure list: the only thing ever looked

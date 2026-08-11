@@ -1068,9 +1068,9 @@ __btree_preload(WT_SESSION_IMPL *session)
     WT_BTREE *btree;
     WT_DECL_ITEM(tmp);
     WT_DECL_RET;
+    WT_PAGE_BLOCK_META block_meta_tmp;
     WT_REF *ref;
     uint64_t block_preload;
-    WT_PAGE_BLOCK_META block_meta_tmp;
 
     btree = S2BT(session);
     block_preload = 0;
@@ -1084,7 +1084,7 @@ __btree_preload(WT_SESSION_IMPL *session)
              * FIXME-WT-14612: If we want to use prefetch with disaggregated storage we will need to
              * supply block metadata.
              */
-            
+
             WT_ERR(__wt_blkcache_read(session, tmp, &block_meta_tmp, addr.addr, addr.size));
             ++block_preload;
         }

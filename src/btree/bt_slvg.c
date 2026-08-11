@@ -1679,7 +1679,6 @@ __slvg_row_trk_update_start(WT_SESSION_IMPL *session, WT_ITEM *stop, uint32_t sl
     WT_ERR(__wt_blkcache_read(session, dsk, NULL, trk->trk_addr, trk->trk_addr_size));
     WT_ERR(__wti_page_inmem(session, NULL, dsk->data, 0, NULL, &page, NULL));
 
-
     /*
      * Walk the page, looking for a key sorting greater than the specified stop key -- that's our
      * new start key.

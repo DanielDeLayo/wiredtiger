@@ -153,10 +153,9 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
     WT_RET(__wti_blkcache_map_read(session, ip, addr, addr_size, &found, &objectid));
     if (found) {
         assert(block_meta != NULL && "No block meta!");
-        if (block_meta != NULL)
-        {
+        if (block_meta != NULL) {
             *block_meta = block_meta_tmp;
-            //block_meta->persistent_page_id = IAF_ID_IGNORE;
+            /* block_meta->persistent_page_id = IAF_ID_IGNORE; */
         }
         skip_cache_put = true;
         if (!expect_conversion)
@@ -214,13 +213,10 @@ __wt_blkcache_read(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *b
         }
 
         assert(block_meta != NULL && "No block meta!");
-        if (block_meta != NULL)
-        {
+        if (block_meta != NULL) {
             *block_meta = block_meta_tmp;
-            //block_meta->persistent_page_id = IAF_ID_IGNORE;    
+            /* block_meta->persistent_page_id = IAF_ID_IGNORE; */
         }
-
-
 
         dsk = ip->data;
 
@@ -815,7 +811,6 @@ __wt_blkcache_write(WT_SESSION_IMPL *session, WT_ITEM *buf, WT_PAGE_BLOCK_META *
 
     if (block_meta == NULL)
         block_meta = &block_meta_tmp;
-
 
     /* Optionally compress the data. */
     WT_ERR(__wt_blkcache_compress(session, buf, compressed, &ctmp, compressed_sizep, &compressed));

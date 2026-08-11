@@ -2329,9 +2329,9 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
 {
     WT_MULTI *multi;
     WT_PAGE *page;
-    #ifdef HAVE_ANALYZE_CACHE
+#ifdef HAVE_ANALYZE_CACHE
     WT_PAGE_BLOCK_META block_meta_init;
-    #endif
+#endif
     WT_PAGE_BLOCK_META *block_meta;
 
     page = r->page;
@@ -2358,22 +2358,20 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
             __wt_page_block_meta_assign(session, multi->block_meta);
     }
 #ifdef HAVE_ANALYZE_CACHE
-    //assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!");
-    if (multi->block_meta == NULL)
-    { 
+    /* assert(page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent page id!"); */
+    if (multi->block_meta == NULL) {
         __wt_page_block_meta_assign(session, &block_meta_init);
-        block_meta = & block_meta_init;
-    }
-    else {
+        block_meta = &block_meta_init;
+    } else {
         block_meta = multi->block_meta;
     }
-    //TODO FIXME Follow the logic of the page ids above
+    /* TODO FIXME Follow the logic of the page ids above */
     block_meta->persistent_page_id = page->persistent_page_id;
 #else
     block_meta = multi->block_meta;
 #endif
-    WT_RET(__rec_write(session, &chunk->image, block_meta, addr, addr_sizep,
-      compressed_sizep, false, F_ISSET(r, WT_REC_CHECKPOINT), false));
+    WT_RET(__rec_write(session, &chunk->image, block_meta, addr, addr_sizep, compressed_sizep,
+      false, F_ISSET(r, WT_REC_CHECKPOINT), false));
 
     if (F_ISSET(r->ref, WT_REF_FLAG_INTERNAL))
         WT_STAT_CONN_DSRC_INCR(session, rec_page_full_image_internal);

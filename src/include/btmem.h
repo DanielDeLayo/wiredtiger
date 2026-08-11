@@ -258,9 +258,9 @@ struct __wt_save_upd {
  */
 struct __wt_page_block_meta {
     uint64_t page_id;
-    #ifdef HAVE_ANALYZE_CACHE
+#ifdef HAVE_ANALYZE_CACHE
     uint64_t persistent_page_id;
-    #endif
+#endif
     uint64_t disagg_lsn;
 
     uint64_t backlink_lsn;
