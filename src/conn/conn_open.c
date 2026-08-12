@@ -221,7 +221,11 @@ __wti_connection_close(WT_CONNECTION_IMPL *conn)
 
 #ifdef HAVE_ANALYZE_CACHE
     if (conn->iaf != NULL) {
-        Iaf_print(conn->iaf);
+        char *iaf_str = Iaf_stringify(conn->iaf);
+        if (iaf_str) {
+            __wt_verbose_error(session, WT_VERB_EVICTION, "%s", iaf_str);
+            Iaf_free_string(iaf_str);
+        }
         Iaf_destroy(&(conn->iaf));
     }
 #endif
