@@ -2367,6 +2367,10 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
     }
     // On a split, generate a new page id for everyone. Otherwise, keep the same page.
     if (last_block && r->multi_next == 1) {
+        if (page->persistent_page_id == IAF_ID_NEED_REINIT ||
+            page->persistent_page_id == IAF_ID_UNINIT) {
+            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        }
         block_meta->persistent_page_id = page->persistent_page_id;
     } else {
         block_meta->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);

@@ -209,6 +209,11 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     /* FIXME: TODO Probably convert this to 64 bits at some point, or make 32 bits consistent */
     assert(block_meta != NULL && "Block metadata uninit!");
     assert(block->objectid == 0 && "Block id overwrite!");
+    if (block_meta != NULL &&
+        (block_meta->persistent_page_id == IAF_ID_NEED_REINIT ||
+         block_meta->persistent_page_id == IAF_ID_UNINIT)) {
+        block_meta->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+    }
     if (block_meta != NULL && block_meta->persistent_page_id > UINT32_MAX) {
         block_meta->persistent_page_id = IAF_PAGE_OVERFLOW;
     }
