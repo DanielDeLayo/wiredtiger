@@ -221,12 +221,9 @@ __wti_connection_close(WT_CONNECTION_IMPL *conn)
 
 #ifdef HAVE_ANALYZE_CACHE
     if (conn->iaf != NULL) {
-        char hist_path[1024];
-        if (conn->home != NULL)
-            (void)__wt_snprintf(hist_path, sizeof(hist_path), "%s/iaf_trace.hist", conn->home);
-        else
-            (void)__wt_snprintf(hist_path, sizeof(hist_path), "iaf_trace.hist");
-        Iaf_dump_file(conn->iaf, hist_path);
+        char *iaf_str = Iaf_stringify(conn->iaf);
+        __wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str);
+        Iaf_free_string(iaf_str);
         Iaf_destroy(&(conn->iaf));
     }
 #endif

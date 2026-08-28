@@ -797,8 +797,7 @@ skip_evict:
                     /* state for debugging purposes. */
                     if (should_print) {
                         char *iaf_str = Iaf_stringify(iaf);
-                        /* __wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str); */
-                        __wt_verbose_error(session, WT_VERB_EVICTION, "%s", iaf_str);
+                        __wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str);
                         Iaf_free_string(iaf_str);
                     }
                 }

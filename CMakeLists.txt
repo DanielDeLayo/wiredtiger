@@ -145,9 +145,7 @@ if(HAVE_ANALYZE_CACHE)
 
     FetchContent_Declare(
         IAF
-        GIT_REPOSITORY https://github.com/etwest/Increment-and-Freeze.git
-        GIT_TAG sampling
-        GIT_SHALLOW    TRUE
+        SOURCE_DIR /Users/danieldelayo/Gits/Increment-and-Freeze
     )
 
     FetchContent_MakeAvailable(IAF)
