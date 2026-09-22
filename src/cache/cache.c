@@ -54,6 +54,11 @@ __wt_cache_config(WT_SESSION_IMPL *session, const char *cfg[], bool reconfig)
     WT_ERR(__wt_config_gets(session, cfg, "cache_overhead", &cval));
     cache->overhead_pct = (u_int)cval.val;
 
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cache size is only known now, so this is the first point the curve can be sized to it. */
+    __wt_analyze_cache_bound(session);
+#endif
+
 err:
     F_CLR_ATOMIC_32(conn, WT_CONN_RECONFIGURING_CACHE_POOL);
     return (ret);

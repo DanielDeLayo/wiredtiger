@@ -795,11 +795,8 @@ skip_evict:
                       Iaf_write(iaf, (void *)(page->persistent_page_id), page->memory_footprint);
                     /* Whenever the IAF algorithm indicates that we should print, log the current */
                     /* state for debugging purposes. */
-                    if (should_print) {
-                        char *iaf_str = Iaf_stringify(iaf);
-                        __wt_verbose_info(session, WT_VERB_EVICTION, "%s", iaf_str);
-                        Iaf_free_string(iaf_str);
-                    }
+                    if (should_print)
+                        __wt_analyze_cache_log(session);
                 }
             }
 #endif
