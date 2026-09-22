@@ -13,15 +13,15 @@
 /*
  * How far past the configured cache size the miss-ratio curve should reach. The point of the curve
  * is to say whether more cache would help, so it has to extend well beyond the size actually in
- * use; the cost is roughly 8 bytes of hits vector per block covered, doubled transiently whenever
- * the curve is stringified.
+ * use. This is a ceiling rather than a reservation: the curve costs 8 bytes per block of the living
+ * set actually touched, and stops growing there.
  */
 #define WT_IAF_CACHE_HEADROOM 4
 
 /*
- * Bound used until the cache configuration has been parsed. conn->iaf is created at the very top of
- * wiredtiger_open, before the cache size is known, so this only has to cover the handful of
- * accesses made before __wt_analyze_cache_bound() runs.
+ * Placeholder bound. conn->iaf has to be created at the top of wiredtiger_open, before the cache
+ * size is known, but __wt_analyze_cache_bound() replaces this from __wt_cache_create() -- still
+ * ahead of the first metadata read -- so no request is ever recorded under it.
  */
 #define WT_IAF_DEFAULT_MAX_BLOCKS (1000000)
 
@@ -70,8 +70,8 @@ __wt_analyze_cache_log(WT_SESSION_IMPL *session)
 
     /*
      * Pages requested is every lookup that found a page in cache or read one in; pages read is the
-     * subset that missed. Both counters are zero unless statistics are enabled on the connection,
-     * in which case we report a hit rate of zero rather than dividing by it.
+     * subset that missed. Both stay zero unless the connection enabled statistics, hence the guard
+     * on the division.
      */
     requests = WT_STAT_CONN_READ(conn->stats, cache_pages_requested_internal) +
       WT_STAT_CONN_READ(conn->stats, cache_pages_requested_leaf);
