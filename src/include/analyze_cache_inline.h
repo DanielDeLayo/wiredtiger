@@ -19,6 +19,13 @@
 #define WT_IAF_CACHE_HEADROOM 4
 
 /*
+ * Sample one address in 2^WT_IAF_SAMPLING_LOG2. Sampling divides both the work IAF does per access
+ * and the memory the curve needs by that factor; the cache-size axis is scaled back up when the
+ * curve is emitted, so the reported sizes stay in real blocks either way.
+ */
+#define WT_IAF_SAMPLING_LOG2 2 /* 1 in 4 */
+
+/*
  * Placeholder bound. conn->iaf has to be created at the top of wiredtiger_open, before the cache
  * size is known, but __wt_analyze_cache_bound() replaces this from __wt_cache_create() -- still
  * ahead of the first metadata read -- so no request is ever recorded under it.
