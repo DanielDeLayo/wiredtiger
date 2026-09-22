@@ -26,11 +26,10 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# test_layered_fast_truncate13.py
-#   Interactions with existing truncates.
+# Interactions with existing truncates.
 #
-#   Verify that subsequent operations - additional truncates, per-key removes,
-#   and reinsertion - compose correctly with a prior committed truncate.
+# Verify that subsequent operations - additional truncates, per-key removes,
+# and reinsertion - compose correctly with a prior committed truncate.
 
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from helper_layered_fast_truncate import (
@@ -62,7 +61,7 @@ class test_layered_fast_truncate13(LayeredFastTruncateConfigMixin, wttest.WiredT
         """Remove a single key in a transaction."""
         with self.auto_closing_cursor() as cursor:
             cursor.set_key(self.key(key))
-            with self.transaction():
+            with self.transaction(commit_timestamp=self.next_commit_ts()):
                 cursor.remove()
 
     def test_per_key_removes_before_truncate(self):
@@ -155,7 +154,7 @@ class test_layered_fast_truncate13(LayeredFastTruncateConfigMixin, wttest.WiredT
         self.setup_follower(keys=range_inclusive(1, 100))
 
         # Truncate keys 30-60 and reinsert key 45 within the same transaction.
-        with self.transaction():
+        with self.transaction(commit_timestamp=self.next_commit_ts()):
             with (
                 self.auto_closing_cursor() as start,
                 self.auto_closing_cursor() as stop,

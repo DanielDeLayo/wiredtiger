@@ -29,22 +29,21 @@
 import wiredtiger, wttest
 from helper_disagg import DisaggConfigMixin, gen_disagg_storages
 
-# test_layered_config08.py
 # Note: This test focuses on validating the behavioral differences of
 # WiredTiger API calls when operating in a disaggregated storage environment.
 
 class test_layered_config08(wttest.WiredTigerTestCase, DisaggConfigMixin):
 
-    disagg_storages = gen_disagg_storages('test_layered_config08', disagg_only = True)
+    test_name = __qualname__
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
     def conn_extensions(self, extlist):
         DisaggConfigMixin.conn_extensions(self, extlist)
 
-    @wttest.skip_for_hook("tiered", "Tiered tables do not support compaction")
     def test_disagg_compact(self):
         # Test that compact operation fails in disaggregated storage mode.
         self.assertRaisesWithMessage(wiredtiger.WiredTigerError,
-            lambda: self.session.compact('table:test_layered_config08'),
+            lambda: self.session.compact(f'table:{self.test_name}'),
             '/Operation not supported/')
         self.assertRaisesWithMessage(wiredtiger.WiredTigerError,
             lambda: self.session.compact(None, 'background=true'),

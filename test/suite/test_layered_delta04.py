@@ -30,11 +30,11 @@ import platform, wttest
 from helper_disagg import DisaggConfigMixin, disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_layered_delta04.py
 # Test 32 consecutive deltas
 
 @disagg_test_class
 class test_layered_delta04(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     encrypt = [
         ('none', dict(encryptor='none', encrypt_args='')),
         ('rotn', dict(encryptor='rotn', encrypt_args='keyid=13')),
@@ -46,8 +46,8 @@ class test_layered_delta04(wttest.WiredTigerTestCase):
     ]
 
     uris = [
-        ('layered', dict(uri='layered:test_layered_delta04')),
-        ('btree', dict(uri='file:test_layered_delta04')),
+        ('layered', dict(uri=f'layered:{test_name}')),
+        ('btree', dict(uri=f'file:{test_name}')),
     ]
 
     ts = [
@@ -57,7 +57,7 @@ class test_layered_delta04(wttest.WiredTigerTestCase):
 
     conn_base_config = 'transaction_sync=(enabled,method=fsync),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                      + 'page_delta=(delta_pct=100),'
-    disagg_storages = gen_disagg_storages('test_layered_delta04', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
     # Make scenarios for different cloud service providers
     scenarios = make_scenarios(encrypt, compress, disagg_storages, uris, ts)
@@ -92,10 +92,7 @@ class test_layered_delta04(wttest.WiredTigerTestCase):
         for i in range(self.nitems):
             self.session.begin_transaction()
             cursor[str(i)] = value1
-            if self.ts:
-                self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(5))
-            else:
-                self.session.commit_transaction()
+            self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(5))
 
         self.session.checkpoint()
 
@@ -104,18 +101,11 @@ class test_layered_delta04(wttest.WiredTigerTestCase):
                 if i % 10 == 0:
                     self.session.begin_transaction()
                     cursor[str(i)] = str(10 + 5 * j)
-                    if self.ts:
-                        self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(10 + 5 * j))
-                    else:
-                        self.session.commit_transaction()
+                    self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(10 + 5 * j))
 
             self.session.checkpoint()
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         if self.ts:
             self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))

@@ -43,7 +43,7 @@ sum_pop_ops(WTPERF *wtperf)
     total = 0;
 
     for (i = 0, thread = wtperf->popthreads; thread != NULL && i < opts->populate_threads;
-         ++i, ++thread)
+      ++i, ++thread)
         total += thread->insert.ops;
     return (total);
 }
@@ -81,26 +81,8 @@ sum_ckpt_ops(WTPERF *wtperf)
     total = 0;
 
     for (i = 0, thread = wtperf->ckptthreads; thread != NULL && i < opts->checkpoint_threads;
-         ++i, ++thread)
+      ++i, ++thread)
         total += thread->ckpt.ops;
-    return (total);
-}
-
-/*
- * Return total flush_tier operations.
- */
-uint64_t
-sum_flush_ops(WTPERF *wtperf)
-{
-    CONFIG_OPTS *opts;
-    uint64_t total;
-
-    opts = wtperf->opts;
-
-    if (opts->tiered_flush_interval > 0)
-        total = wtperf->flushthreads->flush.ops;
-    else
-        total = 0;
     return (total);
 }
 
@@ -323,7 +305,7 @@ sum_latency(WTPERF *wtperf, size_t field_offset, TRACK *total)
     memset(total, 0, sizeof(*total));
 
     for (i = 0, thread = wtperf->workers; thread != NULL && i < wtperf->workers_cnt;
-         ++i, ++thread) {
+      ++i, ++thread) {
         trk = (TRACK *)((uint8_t *)thread + field_offset);
 
         for (j = 0; j < ELEMENTS(trk->us); ++j) {

@@ -72,7 +72,6 @@ int
 __wt_cache_create(WT_SESSION_IMPL *session, const char *cfg[])
 {
     WT_CONFIG_ITEM cval;
-    u_int hash_size;
     bool leader;
 
     WT_ASSERT(session, S2C(session)->cache == NULL);
@@ -91,21 +90,16 @@ __wt_cache_create(WT_SESSION_IMPL *session, const char *cfg[])
     WT_RET(__wt_config_gets(session, cfg, "disaggregated.page_log", &cval));
     if (cval.len != 0) {
         WT_RET(__wt_disagg_config_get_role(session, cfg, &leader));
-        S2C(session)->cache->shared_dsk_cache.enabled = !leader;
-    } else
-        S2C(session)->cache->shared_dsk_cache.enabled = false;
 
-    if (S2C(session)->cache->shared_dsk_cache.enabled) {
-        /*
-         * Best-effort sizing: budget 0.2% of the cache and assume one item per bucket, so dividing
-         * that budget by the per-bucket cost gives the count, with a floor of a thousand buckets.
-         */
-        hash_size = (u_int)WT_MAX(S2C(session)->cache_size / 500 /
-            (sizeof(WT_SHARED_DSK_ITEM) + sizeof(*S2C(session)->cache->shared_dsk_cache.hash)),
-          WT_THOUSAND);
-        WT_RET(__wti_shared_dsk_cache_init(session, hash_size));
-        WT_STAT_CONN_SET(session, cache_shared_dsk_hash_size, hash_size);
+        if (!leader) {
+            WT_RET(
+              __wt_shared_dsk_cache_init(session, WT_SHARED_DSK_CACHE_DEFAULT_HASH_SIZE(session)));
+            __wt_atomic_store_uint8_relaxed(
+              &S2C(session)->cache->shared_dsk_cache.state, WT_DSK_CACHE_ACTIVE);
+        }
     }
+
+    WT_RET(__wti_cache_top_init(session));
 
     /*
      * We get/set some values in the cache statistics (rather than have two copies), configure them.
@@ -181,7 +175,13 @@ __wt_cache_stats_update(WT_SESSION_IMPL *session)
     WT_STATP_CONN_SET(session, stats, cache_bytes_hs_updates,
       __wt_cache_bytes_plus_overhead(
         cache, __wt_atomic_load_uint64_relaxed(&cache->bytes_hs_updates)));
+    WT_STATP_CONN_SET(session, stats, cache_shared_dsk_bytes_duplicate,
+      __wt_atomic_load_uint64_relaxed(&cache->bytes_shared_dsk_duplicate));
     WT_STATP_CONN_SET(session, stats, cache_bytes_image, __wt_cache_bytes_image(cache));
+    WT_STATP_CONN_SET(session, stats, cache_scrub_image_bytes,
+      __wt_atomic_load_uint64_relaxed(&cache->bytes_scrub_image));
+    WT_STATP_CONN_SET(session, stats, cache_scrub_image_pages,
+      __wt_atomic_load_uint64_relaxed(&cache->pages_scrub_image));
     WT_STATP_CONN_SET(
       session, stats, cache_bytes_image_ingest, __wt_cache_bytes_image_ingest(cache));
     WT_STATP_CONN_SET(
@@ -259,6 +259,8 @@ __wt_cache_destroy(WT_SESSION_IMPL *session)
     if (cache == NULL)
         return (0);
 
+    __wti_cache_top_destroy(session);
+
     /* The cache should be empty at this point.  Complain if not. */
     if (cache->pages_inmem != cache->pages_evicted)
         __wt_errx(session,
@@ -281,8 +283,21 @@ __wt_cache_destroy(WT_SESSION_IMPL *session)
             __wt_atomic_load_uint64_relaxed(&cache->bytes_dirty_leaf),
           cache->pages_dirty_intl + cache->pages_dirty_leaf);
 
+    /*
+     * Every page has been discarded and every dhandle closed by this point, so any image checkpoint
+     * scrub retained has been freed with its page. A non-zero count means a path freed an image
+     * without releasing its accounting.
+     */
+    if (__wt_atomic_load_uint64_relaxed(&cache->bytes_scrub_image) != 0 ||
+      __wt_atomic_load_uint64_relaxed(&cache->pages_scrub_image) != 0)
+        __wt_errx(session,
+          "cache server: exiting with %" PRIu64 " scrub image bytes and %" PRIu64
+          " scrub image pages",
+          __wt_atomic_load_uint64_relaxed(&cache->bytes_scrub_image),
+          __wt_atomic_load_uint64_relaxed(&cache->pages_scrub_image));
+
     /* Destroy the shared disk cache if it was initialized. */
-    if (conn->cache->shared_dsk_cache.enabled)
+    if (conn->cache->shared_dsk_cache.hash != NULL)
         __wti_shared_dsk_cache_destroy(session);
 
     __wt_free(session, conn->cache);

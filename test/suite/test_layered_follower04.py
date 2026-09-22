@@ -30,11 +30,11 @@ import os, os.path, shutil, wiredtiger, wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_layered_follower04.py
-#    Make sure a secondary picking up a checkpoint adds in the stable
-#    component of the table.
+# Make sure a secondary picking up a checkpoint adds in the stable
+# component of the table.
 @disagg_test_class
 class test_layered_follower04(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     nitems = 5000
 
     conn_base_config = 'precise_checkpoint=true,'
@@ -42,17 +42,14 @@ class test_layered_follower04(wttest.WiredTigerTestCase):
 
     session_create_config = 'key_format=S,value_format=S,'
 
-    disagg_storages = gen_disagg_storages('test_layered_follower04', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
     scenarios = make_scenarios(disagg_storages, [
         ('layered-prefix', dict(prefix='layered:', table_config='')),
         ('layered-type', dict(prefix='table:', table_config='block_manager=disagg,type=layered,')),
     ])
 
     def test_layered_follower04(self):
-        # Avoid checkpoint error with precise checkpoint
-        self.conn.set_timestamp('stable_timestamp=1')
-
-        self.uri = self.prefix + 'test_layered_follower04'
+        self.uri = self.prefix + self.test_name
 
         # The node started as a follower, so step it up as the leader
         self.conn.reconfigure('disaggregated=(role="leader")')
@@ -65,12 +62,18 @@ class test_layered_follower04(wttest.WiredTigerTestCase):
         self.session.create(self.uri, self.session_create_config + self.table_config)
         session_follow.create(self.uri, self.session_create_config + self.table_config)
 
-        # Put data into the primary
+        # Put data into the primary, committing at the stable timestamp that is
+        # set before the checkpoint so the precise checkpoint captures it.
         value_prefix1 = 'aaa'
         cursor = self.session.open_cursor(self.uri)
+        self.session.begin_transaction()
         for i in range(self.nitems):
             cursor[str(i)] = value_prefix1 + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(1))
         cursor.close()
+
+        # Avoid checkpoint error with precise checkpoint
+        self.conn.set_timestamp('stable_timestamp=1')
 
         # Create a checkpoint
         self.session.checkpoint()
@@ -108,12 +111,16 @@ class test_layered_follower04(wttest.WiredTigerTestCase):
         # Avoid checkpoint error with precise checkpoint
         conn_follow.set_timestamp('stable_timestamp=1')
 
-        # Put data into the new primary (old secondary)
+        # Put data into the new primary (old secondary), then make it stable
+        # before the precise checkpoint so the checkpoint captures it.
         value_prefix2 = 'bbb'
         cursor = session_follow.open_cursor(self.uri)
+        session_follow.begin_transaction()
         for i in range(self.nitems, 2 * self.nitems):
             cursor[str(i)] = value_prefix2 + str(i)
+        session_follow.commit_transaction('commit_timestamp=' + self.timestamp_str(2))
         cursor.close()
+        conn_follow.set_timestamp('stable_timestamp=' + self.timestamp_str(2))
 
         # Create a checkpoint
         session_follow.checkpoint()

@@ -11,21 +11,23 @@
 #define WT_RECNO_OOB 0 /* Illegal record number */
 
 /* AUTOMATIC FLAG VALUE GENERATION START 0 */
-#define WT_READ_CACHE 0x0001u
-#define WT_READ_IGNORE_CACHE_SIZE 0x0002u
-#define WT_READ_INTERNAL_OP 0x0004u /* Internal operations don't bump a page's readgen */
-#define WT_READ_NOTFOUND_OK 0x0008u
-#define WT_READ_NO_SPLIT 0x0010u
-#define WT_READ_NO_WAIT 0x0020u
-#define WT_READ_PREFETCH 0x0040u
-#define WT_READ_PREV 0x0080u
-#define WT_READ_RESTART_OK 0x0100u
-#define WT_READ_SEE_DELETED 0x0200u
-#define WT_READ_SKIP_DELETED 0x0400u
-#define WT_READ_SKIP_INTL 0x0800u
-#define WT_READ_TRUNCATE 0x1000u
-#define WT_READ_VISIBLE_ALL 0x2000u
-#define WT_READ_WONT_NEED 0x4000u
+#define WT_READ_CACHE 0x00001u
+#define WT_READ_IGNORE_CACHE_SIZE 0x00002u
+#define WT_READ_INTERNAL_OP 0x00004u /* Internal operations don't bump a page's readgen */
+#define WT_READ_NOTFOUND_OK 0x00008u
+#define WT_READ_NO_SPLIT 0x00010u
+#define WT_READ_NO_WAIT 0x00020u
+#define WT_READ_PREFETCH 0x00040u
+#define WT_READ_PREV 0x00080u
+#define WT_READ_RESTART_OK 0x00100u
+#define WT_READ_SEE_DELETED 0x00200u
+#define WT_READ_SIZE_STAT 0x00400u
+#define WT_READ_SKIP_CORRUPT 0x00800u
+#define WT_READ_SKIP_DELETED 0x01000u
+#define WT_READ_SKIP_INTL 0x02000u
+#define WT_READ_TRUNCATE 0x04000u
+#define WT_READ_VISIBLE_ALL 0x08000u
+#define WT_READ_WONT_NEED 0x10000u
 /* AUTOMATIC FLAG VALUE GENERATION STOP 32 */
 
 #define WT_READ_EVICT_WALK_FLAGS \
@@ -38,6 +40,14 @@
  * disable splits.
  */
 #define WT_READ_NO_EVICT (WT_READ_IGNORE_CACHE_SIZE | WT_READ_NO_SPLIT)
+
+/*
+ * The WT_READ_SKIP_CORRUPT flag means that caller will handle a corrupt page read, while the
+ * WT_CONN_DATA_CORRUPTION flag means that a block manager actually detected one.
+ */
+#define WT_READ_SKIP_CORRUPT_HIT(session, flags) \
+    (FLD_ISSET((flags), WT_READ_SKIP_CORRUPT) && \
+      F_ISSET_ATOMIC_32(S2C(session), WT_CONN_DATA_CORRUPTION))
 
 /*
  * WT_PAGE_HEADER --
@@ -263,7 +273,13 @@ struct __wt_page_block_meta {
 #endif
     uint64_t disagg_lsn;
 
+    /*
+     * LSN of the previous write this one links back to: the immediately preceding delta or base
+     * image for a delta, or the previous full image for a full page. Zero for a page's first write,
+     * including the first write after a discard.
+     */
     uint64_t backlink_lsn;
+    /* LSN of the base page at the bottom of the delta chain; 0 for a base page. */
     uint64_t base_lsn;
 
     uint32_t checksum;
@@ -360,21 +376,21 @@ struct __wt_page_modify {
     /* The first unwritten transaction ID (approximate). */
     wt_shared uint64_t first_dirty_txn;
 
-    /* The transaction state last time eviction was attempted. */
-    uint64_t last_evict_pass_gen;
-    uint64_t last_eviction_id;
-    wt_timestamp_t last_eviction_timestamp;
+    /* The transaction state as of the last eviction attempt, successful or not. */
+    uint64_t rec_evict_attempt_pass_gen;
+    uint64_t rec_evict_attempt_oldest_id;
+    wt_timestamp_t rec_evict_attempt_pinned_ts;
 
 #ifdef HAVE_DIAGNOSTIC
     /* Check that transaction time moves forward. */
-    uint64_t last_oldest_id;
+    uint64_t rec_last_oldest_id;
 #endif
 
     /* Avoid checking for obsolete updates during checkpoints. */
     uint64_t obsolete_check_txn;
     wt_timestamp_t obsolete_check_timestamp;
 
-    /* The largest transaction and timestamp seen on the page by reconciliation. */
+    /* The largest transaction and timestamp seen on the page by a successful reconciliation. */
     uint64_t rec_max_txn;
     wt_timestamp_t rec_max_timestamp;
 
@@ -384,6 +400,12 @@ struct __wt_page_modify {
      * when no new content could be written.
      */
     wt_timestamp_t rec_pinned_stable_timestamp;
+
+    /*
+     * Published checkpoint snapshot generation for precise checkpoints. Lets checkpoint skip
+     * re-reconciling pages already reconciled by eviction.
+     */
+    uint64_t rec_ckpt_snap_gen;
 
     /*
      * Track the prune timestamp used for the most recent reconciliation. It's useful to avoid
@@ -529,6 +551,9 @@ struct __wt_page_modify {
 #define WT_PAGE_DIRTY_FIRST 1
     wt_shared uint32_t page_state;
 
+    /* Size of the disk image checkpoint scrub is keeping in cache, zero if none is tracked. */
+    uint32_t scrub_image_bytes;
+
     /* Kept with the trailing byte fields to avoid alignment padding before inst_updates. */
     bool instantiated; /* True if this is a newly instantiated page. */
 
@@ -540,10 +565,14 @@ struct __wt_page_modify {
 #define WT_PAGE_RS_RESTORED 0x1
     uint8_t restore_state; /* Created by restoring updates */
 
-/* Additional diagnostics fields to catch invalid updates to page_state, even in release builds. */
+/*
+ * Flags set while the page is held exclusive; the exclusive and reconciling flags catch invalid
+ * updates to page_state, even in release builds.
+ */
 /* AUTOMATIC FLAG VALUE GENERATION START 0 */
 #define WT_PAGE_MODIFY_EXCLUSIVE 0x1u
-#define WT_PAGE_MODIFY_RECONCILING 0x2u
+#define WT_PAGE_MODIFY_INSTANTIATING 0x2u
+#define WT_PAGE_MODIFY_RECONCILING 0x4u
     /* AUTOMATIC FLAG VALUE GENERATION STOP 8 */
     uint8_t flags;
 };
@@ -696,7 +725,7 @@ struct __wt_page {
         uint32_t __entries;                                                          \
         WT_INTL_INDEX_GET(session, page, __pindex);                                  \
         for (__refp = __pindex->index, __entries = __pindex->entries; __entries > 0; \
-             --__entries) {                                                          \
+          --__entries) {                                                             \
             (ref) = *__refp++;
 #define WT_INTL_FOREACH_REVERSE_BEGIN(session, page, ref)                                 \
     do {                                                                                  \
@@ -705,7 +734,7 @@ struct __wt_page {
         uint32_t __entries;                                                               \
         WT_INTL_INDEX_GET(session, page, __pindex);                                       \
         for (__refp = __pindex->index + __pindex->entries, __entries = __pindex->entries; \
-             __entries > 0; --__entries) {                                                \
+          __entries > 0; --__entries) {                                                   \
             (ref) = *--__refp;
 #define WT_INTL_FOREACH_END \
     }                       \
@@ -865,8 +894,10 @@ struct __wt_page {
  *	Statistics to track how many deleted pages are skipped as part of the tree walk.
  */
 struct __wt_page_walk_skip_stats {
-    size_t total_del_pages_skipped;
+    size_t total_del_internal_pages_skipped;
+    size_t total_del_leaf_pages_skipped;
     size_t total_inmem_del_pages_skipped;
+    uint64_t total_skip_lock_contended;
 };
 
 /*
@@ -1420,7 +1451,7 @@ struct __wt_row { /* On-page key, on-page cell, or off-page WT_IKEY */
     for ((i) = (page)->entries, (rip) = (page)->pg_row; (i) > 0; ++(rip), --(i))
 #define WT_ROW_FOREACH_REVERSE(page, rip, i)                                             \
     for ((i) = (page)->entries, (rip) = (page)->pg_row + ((page)->entries - 1); (i) > 0; \
-         --(rip), --(i))
+      --(rip), --(i))
 
 /*
  * WT_ROW_SLOT --
@@ -1872,6 +1903,7 @@ struct __wt_verify_info {
 /* AUTOMATIC FLAG VALUE GENERATION START 0 */
 #define WT_VRFY_DISK_CONTINUE_ON_FAILURE 0x1u
 #define WT_VRFY_DISK_EMPTY_PAGE_OK 0x2u
+#define WT_VRFY_DISK_FROM_DELTA 0x4u
     /* AUTOMATIC FLAG VALUE GENERATION STOP 32 */
     uint32_t flags;
 };

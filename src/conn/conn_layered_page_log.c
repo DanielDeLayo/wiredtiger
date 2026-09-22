@@ -10,6 +10,7 @@
 
 /* Function prototypes for disaggregated storage and layered tables. */
 static void __disagg_set_crypt_header(WT_SESSION_IMPL *session, WT_CRYPT_KEYS *crypt);
+static void __disagg_prune_pending_crypt_keys(WT_SESSION_IMPL *session, wt_timestamp_t bound);
 
 /*
  * __disagg_get_page --
@@ -21,7 +22,7 @@ __disagg_get_page(WT_SESSION_IMPL *session, WT_PAGE_LOG_HANDLE *page_log, uint64
   uint64_t lsn, WT_ITEM *item)
 {
     WT_PAGE_LOG_GET_ARGS get_args;
-    u_int count, retry;
+    u_int count;
 
     if (page_log == NULL)
         return (ENOTSUP);
@@ -30,30 +31,21 @@ __disagg_get_page(WT_SESSION_IMPL *session, WT_PAGE_LOG_HANDLE *page_log, uint64
 
     WT_CLEAR(get_args);
     get_args.lsn = lsn;
+    count = 1;
 
-    retry = 0;
-    for (;;) {
-        count = 1;
-        WT_RET(page_log->plh_get(page_log, &session->iface, page_id, 0, &get_args, item, &count));
-        WT_ASSERT(session, count <= 1); /* Corrupt data. */
+    /*
+     * FIXME-WT-18278 Distinguish "not found" from other error returns. count == 0 may be a
+     * redundant not-found check, revisit later.
+     */
+    WT_RET(page_log->plh_get(page_log, &session->iface, page_id, 0, &get_args, item, &count));
+    WT_ASSERT(session, count <= 1); /* Corrupt data. */
 
-        /* Found the data. */
-        if (count == 1)
-            break;
+    /* Found the data. */
+    if (count == 1)
+        return (0);
 
-        /* Otherwise retry up to 100 times to account for page materialization delay. */
-        if (retry > 100) {
-            __wt_verbose_error(session, WT_VERB_READ,
-              "read failed for page ID %" PRIu64 ", lsn %" PRIu64, page_id, lsn);
-            return (EIO);
-        }
-        __wt_verbose_notice(session, WT_VERB_READ,
-          "retry #%" PRIu32 " for page_id %" PRIu64 ", lsn %" PRIu64, retry, page_id, lsn);
-        __wt_sleep(0, 10000 + retry * 5000);
-        ++retry;
-    }
-
-    return (0);
+    WT_RET_MSG(session, EIO,
+      "Page ID %" PRIu64 ", LSN %" PRIu64 " not found in disaggregated storage", page_id, lsn);
 }
 
 /*
@@ -267,7 +259,8 @@ __wti_disagg_load_crypt_key(WT_SESSION_IMPL *session, WT_DISAGG_METADATA *metada
      * key provider decide about the appropriate key.
      */
     if (metadata->key_provider == NULL) {
-        WT_ERR(key_provider->load_key(key_provider, (WT_SESSION *)session, &crypt));
+        WT_ERR_MSG_CHK(session, key_provider->load_key(key_provider, (WT_SESSION *)session, &crypt),
+          "key provider: load-key: no persisted key in checkpoint");
         return (0);
     }
 
@@ -276,7 +269,8 @@ __wti_disagg_load_crypt_key(WT_SESSION_IMPL *session, WT_DISAGG_METADATA *metada
     WT_ERR(__wti_disagg_parse_crypt_meta(session, metadata, &page_id, &lsn));
 
     /* Read the encryption key data from disaggregated storage. */
-    WT_ERR(__disagg_get_crypt_key(session, page_id, lsn, &key_item));
+    WT_ERR_MSG_CHK(session, __disagg_get_crypt_key(session, page_id, lsn, &key_item),
+      "key provider: page-read: page_id=%" PRIu64 ", lsn=%" PRIu64, page_id, lsn);
 
     /* Validate the crypt data. */
     WT_ERR(__disagg_validate_crypt(session, &key_item, &crypt_header));
@@ -285,9 +279,17 @@ __wti_disagg_load_crypt_key(WT_SESSION_IMPL *session, WT_DISAGG_METADATA *metada
     crypt.keys.data = (uint8_t *)key_item.data + crypt_header->header_size;
     crypt.keys.size = crypt_header->crypt_size;
     crypt.r.lsn = lsn;
+    crypt.timestamp = crypt_header->timestamp;
+
+    __wt_verbose_info(session, WT_VERB_DISAGGREGATED_STORAGE,
+      "Loading persisted crypt key: lsn=%" PRIu64 ", timestamp=%" PRIu64, lsn, crypt.timestamp);
 
     /* Callback to load the encryption key data into the key provider. */
-    WT_ERR(key_provider->load_key(key_provider, (WT_SESSION *)session, &crypt));
+    WT_ERR_MSG_CHK(session, key_provider->load_key(key_provider, (WT_SESSION *)session, &crypt),
+      "key provider: load-key: lsn=%" PRIu64 ", timestamp=%" PRIu64, lsn, crypt.timestamp);
+
+    /* Prune the in-memory list on every checkpoint pickup. */
+    __disagg_prune_pending_crypt_keys(session, crypt_header->timestamp);
 
 err:
     __wt_buf_free(session, &key_item);
@@ -459,6 +461,57 @@ __wti_disagg_pending_crypt_key_clear(WT_SESSION_IMPL *session)
 }
 
 /*
+ * __disagg_select_pending_crypt_key --
+ *     Return the queued key with the highest timestamp less than or equal to the checkpoint
+ *     timestamp, or NULL if none qualifies. Caller must hold the pending key lock.
+ */
+static WT_DISAGG_PENDING_CRYPT_KEY *
+__disagg_select_pending_crypt_key(WT_SESSION_IMPL *session, wt_timestamp_t checkpoint_timestamp)
+{
+    WT_DISAGG_PENDING_CRYPT_KEY *chosen = NULL, *entry;
+#ifdef HAVE_DIAGNOSTIC
+    wt_timestamp_t prev_timestamp = WT_TS_NONE;
+#endif
+
+    /* The queue is sorted in ascending timestamp order; assert the ordering while scanning. */
+    TAILQ_FOREACH (entry, &S2C(session)->disaggregated_storage.pending_crypt_key_qh, q) {
+#ifdef HAVE_DIAGNOSTIC
+        WT_ASSERT(session, entry->timestamp > prev_timestamp);
+        prev_timestamp = entry->timestamp;
+#endif
+        if (entry->timestamp > checkpoint_timestamp)
+            break;
+        chosen = entry;
+    }
+    return (chosen);
+}
+
+/*
+ * __disagg_prune_pending_crypt_keys --
+ *     Free queued keys with a timestamp less than or equal to the given bound, retaining newer
+ *     entries.
+ */
+static void
+__disagg_prune_pending_crypt_keys(WT_SESSION_IMPL *session, wt_timestamp_t bound)
+{
+    WT_CONNECTION_IMPL *conn;
+    WT_DISAGG_PENDING_CRYPT_KEY *entry, *tmp;
+
+    conn = S2C(session);
+
+    __wt_spin_lock(session, &conn->disaggregated_storage.pending_crypt_key_lock);
+    WT_TAILQ_SAFE_REMOVE_BEGIN(entry, &conn->disaggregated_storage.pending_crypt_key_qh, q, tmp)
+    {
+        if (entry->timestamp > bound)
+            break;
+        TAILQ_REMOVE(&conn->disaggregated_storage.pending_crypt_key_qh, entry, q);
+        __disagg_pending_crypt_key_free(session, &entry);
+    }
+    WT_TAILQ_SAFE_REMOVE_END
+    __wt_spin_unlock(session, &conn->disaggregated_storage.pending_crypt_key_lock);
+}
+
+/*
  * __wti_disagg_set_crypt_key --
  *     Queue an encryption key to be persisted at the next checkpoint that covers its timestamp.
  *     Timestamps must be monotonically increasing and greater than the global stable timestamp.
@@ -528,6 +581,7 @@ __wt_disagg_put_crypt_helper(WT_SESSION_IMPL *session)
     WT_DECL_RET;
     WT_DISAGG_PENDING_CRYPT_KEY *chosen_key;
     WT_KEY_PROVIDER *key_provider;
+    wt_timestamp_t ckpt_timestamp;
     uint64_t lsn;
     bool push_mode;
 
@@ -535,18 +589,20 @@ __wt_disagg_put_crypt_helper(WT_SESSION_IMPL *session)
     key_provider = conn->key_provider;
     WT_CLEAR(crypt);
     lsn = 0;
+    ckpt_timestamp = WT_TS_NONE;
     push_mode = F_ISSET(conn, WT_CONN_KEY_PROVIDER_PUSH);
 
     WT_ASSERT_SPINLOCK_OWNED(session, &conn->checkpoint_lock);
 
-    if (session->ckpt.crash_trigger_point == KEY_PROVIDER_CRASH_BEFORE_KEY_ROTATION)
+    if (session->ckpt.crash_trigger_point == CKPT_CRASH_KEY_PROVIDER_BEFORE_KEY_ROTATION)
         __wt_debug_crash(session);
 
     if (push_mode) {
-        /* Push mode: pick the most recently pushed key under the lock. */
+        /* Push mode: select the key with the highest timestamp less than or equal to the
+         * checkpoint timestamp. */
+        ckpt_timestamp = conn->disaggregated_storage.cur_checkpoint_timestamp;
         __wt_spin_lock(session, &conn->disaggregated_storage.pending_crypt_key_lock);
-        chosen_key = TAILQ_LAST(
-          &conn->disaggregated_storage.pending_crypt_key_qh, __wt_disagg_pending_crypt_key_qh);
+        chosen_key = __disagg_select_pending_crypt_key(session, ckpt_timestamp);
         __wt_spin_unlock(session, &conn->disaggregated_storage.pending_crypt_key_lock);
         if (chosen_key == NULL)
             goto done;
@@ -580,7 +636,7 @@ __wt_disagg_put_crypt_helper(WT_SESSION_IMPL *session)
     /* Write the encryption key data to disaggregated storage. */
     ret = __disagg_put_crypt_key(session, WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID, &crypt.keys, &lsn);
 
-    if (session->ckpt.crash_trigger_point == KEY_PROVIDER_CRASH_DURING_KEY_ROTATION)
+    if (session->ckpt.crash_trigger_point == CKPT_CRASH_KEY_PROVIDER_DURING_KEY_ROTATION)
         __wt_debug_crash(session);
 
     /* Callback to update key provider on the result of new encryption key data. */
@@ -597,11 +653,14 @@ __wt_disagg_put_crypt_helper(WT_SESSION_IMPL *session)
     }
     WT_IGNORE_RET(key_provider->on_key_update(key_provider, (WT_SESSION *)session, &crypt));
 
-    /* On success, drain all items in queue. */
+    /*
+     * On success, drain all keys with a timestamp less than or equal to the checkpoint timestamp;
+     * newer keys are retained for a later checkpoint.
+     */
     if (push_mode && ret == 0)
-        __wti_disagg_pending_crypt_key_clear(session);
+        __disagg_prune_pending_crypt_keys(session, ckpt_timestamp);
 
-    if (session->ckpt.crash_trigger_point == KEY_PROVIDER_CRASH_AFTER_KEY_ROTATION)
+    if (session->ckpt.crash_trigger_point == CKPT_CRASH_KEY_PROVIDER_AFTER_KEY_ROTATION)
         __wt_debug_crash(session);
 done:
 err:
@@ -699,6 +758,38 @@ err:
 }
 
 /*
+ * __disagg_append_crypt_meta --
+ *     Append key provider metadata referencing the KEK page to the checkpoint metadata.
+ */
+static int
+__disagg_append_crypt_meta(WT_SESSION_IMPL *session, WT_ITEM *metadata_buf)
+{
+    WT_CONNECTION_IMPL *conn;
+
+    conn = S2C(session);
+
+    if (conn->key_provider == NULL)
+        return (0);
+
+    /*
+     * A configured key provider always has a persisted KEK page by checkpoint time. Everything the
+     * checkpoint writes, including the metadata table, is encrypted, so a key must already exist;
+     * reaching here without one should be impossible.
+     */
+    WT_ASSERT(session,
+      conn->disaggregated_storage.last_key_provider_page_lsn[WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID] !=
+        0);
+
+    WT_RET(__wt_buf_catfmt(session, metadata_buf,
+      ",\n"
+      "key_provider=(page.1=(page_id=%d,lsn=%" PRIu64 "),version=1)",
+      WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID,
+      conn->disaggregated_storage.last_key_provider_page_lsn[WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID]));
+
+    return (0);
+}
+
+/*
  * __wt_disagg_put_checkpoint_meta --
  *     Write checkpoint information to the metadata page log and do the relevant bookkeeping.
  */
@@ -721,6 +812,12 @@ __wt_disagg_put_checkpoint_meta(WT_SESSION_IMPL *session, const char *checkpoint
     lsn = 0;
 
     WT_ASSERT_SPINLOCK_OWNED(session, &conn->checkpoint_lock);
+
+    WT_ASSERT_ALWAYS(session,
+      schema_epoch >= __wt_atomic_load_uint64_acquire(&disagg->last_checkpoint_schema_epoch),
+      "checkpoint writes schema epoch %" PRIu64 ", older than the schema epoch %" PRIu64
+      " already in shared storage",
+      schema_epoch, __wt_atomic_load_uint64_acquire(&disagg->last_checkpoint_schema_epoch));
 
     if (checkpoint_root == NULL) {
         WT_ASSERT(session, checkpoint_root_size == 0);
@@ -748,27 +845,14 @@ __wt_disagg_put_checkpoint_meta(WT_SESSION_IMPL *session, const char *checkpoint
         "timestamp=%" PRIx64 ",\n"
         "oldest_timestamp=%" PRIx64 ",\n"
         "schema_epoch=%" PRIx64 ",\n"
-        "largest_file_id=%" PRIu32,
+        "largest_file_id=%" PRIu32 ",\n"
+        "max_write_gen=%" PRIu64,
         WT_DISAGG_CHECKPOINT_TURTLE_VERSION, WT_DISAGG_CHECKPOINT_TURTLE_COMPATIBLE_VERSION,
-        checkpoint_root_copy, checkpoint_timestamp, oldest_timestamp, schema_epoch, max_table_id));
+        checkpoint_root_copy, checkpoint_timestamp, oldest_timestamp, schema_epoch, max_table_id,
+        __wt_atomic_load_uint64_relaxed(&conn->max_write_gen)));
 
     /* Append key provider metadata, if available. */
-    if (conn->key_provider != NULL) {
-        /*
-         * The key provider LSN field should always be initialized. The LSN is provided either
-         * during startup, or when we detect a new encryption key.
-         */
-        WT_ASSERT(session,
-          conn->disaggregated_storage
-              .last_key_provider_page_lsn[WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID] != 0);
-
-        WT_ERR(__wt_buf_catfmt(session, metadata_buf,
-          ",\n"
-          "key_provider=(page.1=(page_id=%d,lsn=%" PRIu64 "),version=1)",
-          WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID,
-          conn->disaggregated_storage
-            .last_key_provider_page_lsn[WT_DISAGG_KEY_PROVIDER_MAIN_PAGE_ID]));
-    }
+    WT_ERR(__disagg_append_crypt_meta(session, metadata_buf));
 
     /* Compute the checksum for the metadata page. */
     checksum = __wt_checksum(metadata_buf->data, metadata_buf->size);
@@ -783,7 +867,24 @@ __wt_disagg_put_checkpoint_meta(WT_SESSION_IMPL *session, const char *checkpoint
      * Do the bookkeeping. We cannot fail this function past this point, so that our bookkeeping is
      * correct and self-consistent.
      */
+    /*
+     * A leader's own checkpoint is never delivered to itself, so nothing else advances the
+     * checkpoint generation for it. Without this, a node that steps down would answer reads from
+     * this checkpoint while the generation still named an older one, and the first snapshot
+     * established before any checkpoint arrives would pin less than the node has adopted: the
+     * stable bind check then fails. Waiting for the next delivery to advance it is not enough,
+     * because the node serves reads in the meantime.
+     *
+     * No snapshot can observe the two stores out of step: only a follower's snapshots pin a
+     * checkpoint, and a role change cannot interleave here because a step-down takes the checkpoint
+     * lock this path already holds. The order still matters if that ever changes, so advance the
+     * generation first, matching a delivery, which advances it before the adoption publishes the
+     * LSN: a pin is then never older than the LSN a stable bind compares it against.
+     */
+    __wt_gen_advance(session, WT_GEN_DISAGG_CKPT, WT_DISAGG_CKPT_GEN(lsn));
     __wt_atomic_store_uint64_release(&disagg->last_checkpoint_meta_lsn, lsn);
+    /* A leader's own checkpoint is implicitly adopted; keep the statistic in step. */
+    WT_STAT_CONN_SET(session, disagg_checkpoint_meta_lsn, (int64_t)lsn);
     __wt_atomic_store_uint64_release(&disagg->last_checkpoint_timestamp, checkpoint_timestamp);
     __wt_atomic_store_uint64_release(&disagg->last_checkpoint_oldest_timestamp, oldest_timestamp);
     __wt_atomic_store_uint64_release(&disagg->last_checkpoint_schema_epoch, schema_epoch);
@@ -953,6 +1054,14 @@ __disagg_parse_meta(WT_SESSION_IMPL *session, const WT_ITEM *meta_buf, WT_DISAGG
 
             if (cfg_value.len > 0)
                 metadata->largest_file_id = (uint32_t)cfg_value.val;
+        } else if (WT_CONFIG_LIT_MATCH("max_write_gen", cfg_key)) {
+            WT_ASSERT_ALWAYS(session, metadata->max_write_gen == 0,
+              "Duplicate max write generation entry in disaggregated storage metadata: "
+              "metadata->max_write_gen=%" PRIu64,
+              metadata->max_write_gen);
+
+            if (cfg_value.len > 0)
+                metadata->max_write_gen = (uint64_t)cfg_value.val;
         } else if (WT_CONFIG_LIT_MATCH("key_provider", cfg_key)) {
             WT_ASSERT_ALWAYS(session, metadata->key_provider == NULL,
               "Duplicate key_provider entry in disaggregated storage metadata");
@@ -1103,5 +1212,17 @@ __ut_disagg_parse_version_and_check(
   WT_SESSION_IMPL *session, const WT_ITEM *meta_buf, WT_DISAGG_METADATA *metadata)
 {
     return (__disagg_parse_version_and_check(session, meta_buf, metadata));
+}
+
+WT_DISAGG_PENDING_CRYPT_KEY *
+__ut_disagg_select_pending_crypt_key(WT_SESSION_IMPL *session, wt_timestamp_t checkpoint_timestamp)
+{
+    return (__disagg_select_pending_crypt_key(session, checkpoint_timestamp));
+}
+
+void
+__ut_disagg_prune_pending_crypt_keys(WT_SESSION_IMPL *session, wt_timestamp_t bound)
+{
+    __disagg_prune_pending_crypt_keys(session, bound);
 }
 #endif

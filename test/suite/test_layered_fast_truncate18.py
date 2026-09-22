@@ -26,9 +26,8 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# test_layered_fast_truncate18.py
-#   Write conflict detection for follower fast truncate (truncate-truncate
-#   conflicts only).
+# Write conflict detection for follower fast truncate (truncate-truncate
+# conflicts only).
 
 from contextlib import closing, nullcontext
 from helper_disagg import disagg_test_class, gen_disagg_storages
@@ -95,7 +94,7 @@ class test_layered_fast_truncate18(LayeredFastTruncateConfigMixin, wttest.WiredT
         self.setup_follower()
 
         # Within a single transaction: truncate 30-60, then truncate 40-80.
-        with self.transaction():
+        with self.transaction(commit_timestamp=20):
             self.truncate_on(self.session, 30, 60)
             self.truncate_on(self.session, 40, 80)
 
@@ -156,7 +155,7 @@ class test_layered_fast_truncate18(LayeredFastTruncateConfigMixin, wttest.WiredT
         # txn B truncates 50-70 (no overlap) and commits successfully.
         with (
             self.auto_closing_session() as session_b,
-            self.transaction(session=session_b),
+            self.transaction(session=session_b, commit_timestamp=20),
         ):
             self.truncate_on(session_b, 50, 70)
 
@@ -173,7 +172,7 @@ class test_layered_fast_truncate18(LayeredFastTruncateConfigMixin, wttest.WiredT
         # txn B truncates the same range 30-60 and commits without WT_ROLLBACK.
         with (
             self.auto_closing_session() as session_b,
-            self.transaction(session=session_b),
+            self.transaction(session=session_b, commit_timestamp=20),
         ):
             self.truncate_on(session_b, 30, 60)
 
@@ -215,7 +214,9 @@ class test_layered_fast_truncate18(LayeredFastTruncateConfigMixin, wttest.WiredT
         # WT_ROLLBACK.
         with (
             self.auto_closing_session() as session_b,
-            self.transaction(session=session_b, read_timestamp=10),
+            self.transaction(session=session_b,
+                begin_config='read_timestamp=' + self.timestamp_str(10),
+                commit_timestamp=20),
         ):
             self.truncate_on(session_b, 40, 70)
 

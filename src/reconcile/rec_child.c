@@ -33,7 +33,7 @@ __rec_child_deleted(
      * underlying disk blocks and don't write anything in the internal page.
      */
     if (page_del == NULL)
-        return (__wt_ref_block_free(session, ref, true));
+        return (__wt_ref_block_free(session, ref, true, false));
 
     /*
      * Check visibility. If the truncation is visible to us, we'll also want to know if it's visible
@@ -181,7 +181,7 @@ __rec_child_deleted(
      * is ever a read into this part of the name space again, the cache read function instantiates
      * an entirely new page.)
      */
-    WT_RET(__wt_ref_block_free(session, ref, true));
+    WT_RET(__wt_ref_block_free(session, ref, true, false));
 
     /* Globally visible fast-truncate information is never used again, a NULL value is identical. */
     __wt_overwrite_and_free(session, ref->page_del);
@@ -219,10 +219,13 @@ __wti_rec_child_modify(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WT_REF *ref,
     for (;; __wt_yield()) {
         switch (r->tested_ref_state = WT_REF_GET_STATE(ref)) {
         case WT_REF_DISK:
-            /* On disk, not modified by definition. */
+            /*
+             * On disk, not modified by definition. A concurrent fast-truncate can set ref->page_del
+             * immediately after this state is read, so it cannot be asserted NULL here; if that
+             * happens, the truncate simply isn't reflected in this reconciliation and will be
+             * picked up the next time the parent page is reconciled.
+             */
             WT_ASSERT(session, ref->addr != NULL);
-            /* DISK pages do not have fast-truncate info. */
-            WT_ASSERT(session, ref->page_del == NULL);
             goto done;
 
         case WT_REF_DELETED:

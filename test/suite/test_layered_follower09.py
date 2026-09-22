@@ -30,18 +30,21 @@ import wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages, Oplog
 from wtscenario import make_scenarios
 
-# test_layered_follower09.py
-# Test pinning the content in the ingest table
+# A long-lived timestamped scan starts before the follower adopts its first checkpoint and is
+# served from the ingest table. It must survive the mid-scan bind of the adopted stable table,
+# ingest eviction underneath it, and full key overlap between the constituents (every key has a
+# visible insert and an invisible newer tombstone in both), returning every key exactly once.
 @disagg_test_class
 class test_layered_follower09(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     conn_base_config = ',create,cache_size=10GB,statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                  + 'disaggregated=(lose_all_my_data=true),'
 
-    disagg_storages = gen_disagg_storages('test_layered_follower09', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
     scenarios = make_scenarios(disagg_storages)
 
-    uri = 'layered:test_layered_follower09'
+    uri = f'layered:{test_name}'
 
     nitems = 20000
 
@@ -92,8 +95,9 @@ class test_layered_follower09(wttest.WiredTigerTestCase):
         oplog.apply(self, self.session, self.nitems, self.nitems)
         oplog.check(self, self.session, self.nitems, self.nitems)
 
-        # Make all the data obsolete
-        self.conn.set_timestamp(f'stable_timestamp={self.timestamp_str(oplog.last_timestamp())},oldest_timestamp={self.timestamp_str(oplog.last_timestamp())}')
+        # Advance oldest only to the reader's timestamp: the removals stay non-obsolete, so the
+        # new checkpoint keeps the history the pinned reader needs.
+        self.conn.set_timestamp(f'stable_timestamp={self.timestamp_str(oplog.last_timestamp())},oldest_timestamp={self.timestamp_str(ts)}')
 
         self.session.checkpoint()
 
@@ -105,7 +109,7 @@ class test_layered_follower09(wttest.WiredTigerTestCase):
         self.disagg_advance_checkpoint(conn_follow)
 
         # Trigger eviction on the ingest table
-        evict_cursor = session_follow.open_cursor("file:test_layered_follower09.wt_ingest", None, "debug=(release_evict)")
+        evict_cursor = session_follow.open_cursor(f"file:{self.test_name}.wt_ingest", None, "debug=(release_evict)")
         for i in range(1, self.nitems):
             session_follow.begin_transaction(f'read_timestamp={self.timestamp_str(ts)}')
             evict_cursor.set_key(str(i))

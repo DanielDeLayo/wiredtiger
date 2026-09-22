@@ -30,10 +30,10 @@ import wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_layered_config14.py
-#    Start without local files.
+# Start without local files.
 @disagg_test_class
 class test_layered_config14(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     nitems = 500
 
     conn_config = 'log=(enabled=true),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
@@ -41,16 +41,16 @@ class test_layered_config14(wttest.WiredTigerTestCase):
 
     create_session_config = 'key_format=S,value_format=S'
 
-    layered_uris = ["table:test_layered_config14a", "layered:test_layered_config14b"]
-    file_uris = ["file:test_layered_config14c"]
-    table_uris = ["table:test_layered_config14d"]
+    layered_uris = [f"table:{test_name}a", f"layered:{test_name}b"]
+    file_uris = [f"file:{test_name}c"]
+    table_uris = [f"table:{test_name}d"]
     all_uris = layered_uris + file_uris + table_uris
-    with_ingest_uris = all_uris + ["file:test_layered_config14a.wt_ingest", "file:test_layered_config14b.wt_ingest"]
+    with_ingest_uris = all_uris + [f"file:{test_name}a.wt_ingest", f"file:{test_name}b.wt_ingest"]
 
     update_uris = [table_uris[0]] + ([layered_uris[0]] if len(layered_uris) > 0 else [])
     same_uris = list(set(all_uris) - set(update_uris))
 
-    disagg_storages = gen_disagg_storages('test_layered_config14', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
     scenarios = make_scenarios(disagg_storages)
 
     # Ensure that the metadata cursor has all the expected URIs.
@@ -96,12 +96,15 @@ class test_layered_config14(wttest.WiredTigerTestCase):
 
         # Put data to tables
         value_prefix = 'aaa'
+        self.session.begin_transaction()
         for uri in self.all_uris:
             cursor = self.session.open_cursor(uri, None, None)
             for i in range(self.nitems):
                 cursor[str(i)] = value_prefix + str(i)
             cursor.close()
+        self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(1))
 
+        self.conn.set_timestamp("stable_timestamp=" + self.timestamp_str(1))
         self.session.checkpoint()
         checkpoint_meta = self.disagg_get_complete_checkpoint_meta()
 
@@ -149,12 +152,14 @@ class test_layered_config14(wttest.WiredTigerTestCase):
 
         # Do a few more updates to ensure that the tables continue to be writable
         value_prefix2 = 'bbb'
+        self.session.begin_transaction()
         for uri in self.update_uris:
             cursor = self.session.open_cursor(uri, None, None)
             for i in range(self.nitems):
                 if i % 10 == 0:
                     cursor[str(i)] = value_prefix2 + str(i)
             cursor.close()
+        self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(2))
 
         # Ensure that the leader sees its own writes before a checkpoint
         for uri in self.update_uris:
@@ -174,6 +179,7 @@ class test_layered_config14(wttest.WiredTigerTestCase):
         # Ensure that the shared metadata table has all the expected URIs
         self.check_shared_metadata(self.all_uris)
 
+        self.conn.set_timestamp("stable_timestamp=" + self.timestamp_str(2))
         self.session.checkpoint()
         checkpoint_meta = self.disagg_get_complete_checkpoint_meta()
 

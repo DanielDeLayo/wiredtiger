@@ -26,17 +26,15 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import os, time, wiredtiger, wttest
+import wttest
 from helper_disagg import disagg_test_class
 
-StorageSource = wiredtiger.StorageSource  # easy access to constants
-
-# test_layered_cursor04.py
-#    Basic layered tree cursor insert and read
+# Basic layered tree cursor insert and read
 @disagg_test_class
 class test_layered_cursor04(wttest.WiredTigerTestCase):
 
-    uri_base = "test_layered_cursor04"
+    test_name = __qualname__
+    uri_base = test_name
     conn_config = 'verbose=[layered],disaggregated=(role="leader"),' \
                 + 'disaggregated=(lose_all_my_data=true),'
 
@@ -53,9 +51,11 @@ class test_layered_cursor04(wttest.WiredTigerTestCase):
         cursor = self.session.open_cursor(self.uri, None, None)
 
         self.pr('Inserting a value')
+        self.session.begin_transaction()
         cursor["Hello"] = "World"
         cursor["Hi"] = "There"
         cursor["OK"] = "Go"
+        self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(1))
 
         cursor.set_key("Hello")
         cursor.search()

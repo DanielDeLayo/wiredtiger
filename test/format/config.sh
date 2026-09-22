@@ -6,6 +6,17 @@
 fc="format_config_def.c"
 fh="format_config.h"
 
+# Locate clang-format the same way dist/s_clang_format does: prefer one on PATH,
+# otherwise fall back to the one shipped with the clang toolchain.
+clang_format=$(command -v clang-format)
+if [ -z "$clang_format" ] && command -v clang > /dev/null 2>&1; then
+    clang_format=$(clang -print-prog-name=clang-format)
+fi
+if [ ! -x "$clang_format" ]; then
+    echo "error: clang-format not found; please install it and ensure it is on PATH"
+    exit 1
+fi
+
 cat<<END_OF_HEADER_FILE_PREFIX>$fh
 /* DO NOT EDIT: automatically built by format/config.sh. */
 
@@ -44,26 +55,26 @@ n=0
 while IFS= read -r line; do
     case "$line" in
     '{"'*)
-	tag=`echo "$line" |
-	sed -e 's/{"//' \
-	    -e 's/",.*//' \
-	    -e 's/\./_/g' |
-	tr '[:lower:]' '[:upper:]'`
-	prefix="GLOBAL"
-	if `echo "$line" | grep 'C_TABLE' > /dev/null`; then
-	    prefix="TABLE"
-	fi
-	def="V_""$prefix""_""$tag"
-	echo "$line" |
-	sed -e "s/}/, $def},/" \
-	    -e 's/\(^.*",\) \(.*\)/  \1\n    \2/'
+    tag=`echo "$line" |
+    sed -e 's/{"//' \
+        -e 's/",.*//' \
+        -e 's/\./_/g' |
+    tr '[:lower:]' '[:upper:]'`
+    prefix="GLOBAL"
+    if `echo "$line" | grep 'C_TABLE' > /dev/null`; then
+        prefix="TABLE"
+    fi
+    def="V_""$prefix""_""$tag"
+    echo "$line" |
+    sed -e "s/}/, $def},/" \
+        -e 's/\(^.*",\) \(.*\)/  \1\n    \2/'
 
-	echo "#define $def $n" >> $fh
+    echo "#define $def $n" >> $fh
 
-	n=`expr $n + 1`
-	;;
+    n=`expr $n + 1`
+    ;;
     *)
-	echo "$line"
+    echo "$line"
     esac
 done<<END_OF_INPUT>$fc
 /* DO NOT EDIT: automatically built by format/config.sh. */
@@ -196,13 +207,19 @@ CONFIG configuration_list[] = {
 
 {"disagg.page_log", "configure page log for disaggregated storage (off | palite)", C_IGNORE | C_STRING, 0, 0, 0}
 
-{"disagg.key_provider", "configure a key provider for disaggregated storage", C_BOOL, 20, 0, 0}
+{"disagg.key_provider", "key provider mode for disaggregated storage (0=off, 1=pull, 2=push)", C_IGNORE, 0, 0, 2}
 
 {"disagg.page_log.verbose", "set page log verbosity (default=WT_VERBOSE_INFO)", C_IGNORE, 0, 0, WT_VERBOSE_DEBUG_5}
 
 {"disagg.drain_threads", "set number of drain threads for disaggregated storage", 0x0, 1, 16, 256}
 
 {"disagg.preserve", "preserve layered table constituents after data mismatches", C_IGNORE | C_BOOL, 100, 1, 0}
+
+{"disagg.stepdown_async", "use async step-down instead of synchronous", C_IGNORE | C_BOOL, 0, 0, 0}
+
+{"disagg.stepdown_write_mirroring", "mirror leader step-down-window writes to both constituents", C_BOOL, 50, 0, 0}
+
+{"disagg.snapshot_read", "run background transactions checking snapshot isolation on a follower", C_IGNORE | C_BOOL, 0, 0, 0}
 
 {"disk.checksum", "checksum type (on | off | uncompressed | unencrypted)", C_IGNORE | C_STRING | C_TABLE, 0, 0, 0}
 
@@ -310,7 +327,7 @@ CONFIG configuration_list[] = {
 
 {"runs.mirror", "mirror tables", C_BOOL | C_IGNORE | C_TABLE, 0, 0, 0}
 
-{"runs.ops", "operations per run", 0x0, 0, M(2), M(100)}
+{"runs.ops", "operations per run", 0x0, 0, M(2), UINT_MAX}
 
 {"runs.predictable_replay", "configure predictable replay", C_BOOL, 0, 0, 0}
 
@@ -343,6 +360,8 @@ CONFIG configuration_list[] = {
 {"stress.checkpoint_prepare", "stress checkpoint prepare", C_BOOL, 2, 0, 0}
 
 {"stress.compact_slow", "stress compact", C_BOOL, 2, 0, 0}
+
+{"stress.disagg_stable_dhandle_delay", "stress disagg stable dhandle delay", C_BOOL, 2, 0, 0}
 
 {"stress.evict_reposition", "stress evict reposition", C_BOOL, 2, 0, 0}
 
@@ -379,10 +398,6 @@ CONFIG configuration_list[] = {
 {"stress.split_7", "stress splits (#7)", C_BOOL, 2, 0, 0}
 
 {"stress.split_8", "stress splits (#8)", C_BOOL, 2, 0, 0}
-
-{"tiered_storage.flush_frequency", "calls to checkpoint that are flush_tier, if tiered storage enabled (percentage)", 0x0, 0, 50, 100 }
-
-{"tiered_storage.storage_source", "storage source used (dir_store | none | off)", C_IGNORE | C_STRING, 0, 0, 0}
 
 {"transaction.implicit", "implicit, without timestamps, transactions (percentage)", 0, 0, 100, 100}
 

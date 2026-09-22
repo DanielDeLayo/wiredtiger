@@ -635,7 +635,10 @@ __wt_block_free(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t *addr, 
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cookie's object ID slot carries the persistent page ID in this build; ignore it here. */
     objectid = 0;
+#endif
 
     /*
      * Freeing blocks in a previous object isn't possible in the current architecture. We'd like to

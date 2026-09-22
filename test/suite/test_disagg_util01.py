@@ -32,7 +32,6 @@ from helper_disagg import disagg_test_class
 from run import wt_builddir
 from suite_subprocess import suite_subprocess
 
-# test_disagg_util01.py.py
 # Verify automatic pickup of the latest disaggregated checkpoint at open time:
 #  - test_leader_auto_pickup exercises the in-library leader-mode pickup.
 #  - test_follower_auto_pickup_via_wt exercises the util-driven follower
@@ -47,7 +46,8 @@ from suite_subprocess import suite_subprocess
 
 @disagg_test_class
 class test_disagg_util01(wttest.WiredTigerTestCase, suite_subprocess):
-    uri = 'layered:test_disagg_util01'
+    test_name = __qualname__
+    uri = f'layered:{test_name}'
     create_session_config = 'key_format=i,value_format=S'
     nrows = 100
 
@@ -58,8 +58,11 @@ class test_disagg_util01(wttest.WiredTigerTestCase, suite_subprocess):
         # Leader: create a table, write some rows, checkpoint.
         self.session.create(self.uri, self.create_session_config)
         cursor = self.session.open_cursor(self.uri)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nrows):
             cursor[i] = 'value' + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         cursor.close()
         self.session.checkpoint()
 
@@ -82,8 +85,11 @@ class test_disagg_util01(wttest.WiredTigerTestCase, suite_subprocess):
 
         # The new leader should be able to drive the next checkpoint
         cursor = self.session.open_cursor(self.uri)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nrows, self.nrows + 10):
             cursor[i] = 'value' + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         cursor.close()
         self.session.checkpoint()
 
@@ -126,14 +132,17 @@ class test_disagg_util01(wttest.WiredTigerTestCase, suite_subprocess):
         # Leader: create a table, write some rows, checkpoint.
         self.session.create(self.uri, self.create_session_config)
         cursor = self.session.open_cursor(self.uri)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nrows):
             cursor[i] = 'value' + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         cursor.close()
         self.session.checkpoint()
 
         out, _ = self._run_wt_as_follower('wt-follower', ['list'])
-        self.assertIn('layered:test_disagg_util01', out,
-            f"expected 'layered:test_disagg_util01' in wt list output, got:\n{out}")
+        self.assertIn(f'layered:{self.test_name}', out,
+            f"expected 'layered:{self.test_name}' in wt list output, got:\n{out}")
 
     def test_follower_no_checkpoint_via_wt(self):
         # Don't write or checkpoint anything as leader; wt must still open cleanly
@@ -146,15 +155,21 @@ class test_disagg_util01(wttest.WiredTigerTestCase, suite_subprocess):
         # Leader: write initial values and checkpoint.
         self.session.create(self.uri, self.create_session_config)
         cursor = self.session.open_cursor(self.uri)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nrows):
             cursor[i] = 'old' + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         cursor.close()
         self.session.checkpoint()
 
         # Overwrite values and checkpoint again; the follower must see these.
         cursor = self.session.open_cursor(self.uri)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nrows):
             cursor[i] = 'new' + str(i)
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         cursor.close()
         self.session.checkpoint()
 

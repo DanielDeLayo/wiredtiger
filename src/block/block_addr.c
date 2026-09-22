@@ -152,7 +152,10 @@ __wt_block_addr_invalid(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cookie's object ID slot carries the persistent page ID in this build; ignore it here. */
     objectid = 0;
+#endif
 
 #ifdef HAVE_DIAGNOSTIC
     /*
@@ -184,7 +187,10 @@ __wt_block_addr_string(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cookie's object ID slot carries the persistent page ID in this build; ignore it here. */
     objectid = 0;
+#endif
 
     /* Printable representation. */
     WT_RET(__wt_buf_fmt(session, buf,

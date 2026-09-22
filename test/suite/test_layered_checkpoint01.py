@@ -30,12 +30,12 @@ import os, time, wiredtiger, wttest
 from helper_disagg import disagg_test_class
 from wiredtiger import stat
 
-# test_layered_checkpoint01.py
-#    Add enough content to trigger a checkpoint in the stable table.
+# Add enough content to trigger a checkpoint in the stable table.
 @disagg_test_class
 class test_layered_checkpoint01(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     nitems = 50000
-    uri_base = "test_layered_checkpoint01"
+    uri_base = test_name
     conn_config = 'statistics=(all),statistics_log=(wait=1,json=true,on_close=true),disaggregated=(role="leader"),' \
                 + 'disaggregated=(lose_all_my_data=true),'
 
@@ -52,9 +52,11 @@ class test_layered_checkpoint01(wttest.WiredTigerTestCase):
         cursor = self.session.open_cursor(self.uri, None, None)
 
         for i in range(self.nitems):
+            self.session.begin_transaction()
             cursor["Hello " + str(i)] = "World"
             cursor["Hi " + str(i)] = "There"
             cursor["OK " + str(i)] = "Go"
+            self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(i + 1))
 
         cursor.reset()
 

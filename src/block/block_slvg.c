@@ -109,7 +109,6 @@ __wt_block_salvage_next(
 
     *eofp = 0;
 
-    /* Salvage isn't implemented (yet) for tiered trees. */
     objectid = 0;
 
     fh = block->fh;
@@ -178,7 +177,10 @@ __wt_block_salvage_valid(
      */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cookie's object ID slot carries the persistent page ID in this build; ignore it here. */
     objectid = 0;
+#endif
     if (valid)
         block->slvg_off = offset + size;
     else {

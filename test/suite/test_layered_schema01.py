@@ -26,18 +26,16 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import os, wiredtiger, wttest
+import wttest
 from helper_disagg import disagg_test_class
 from wtscenario import make_scenarios
 
-StorageSource = wiredtiger.StorageSource  # easy access to constants
-
-# test_layered_schema01.py
-#    Basic layered tree creation test
+# Basic layered tree creation test
 @disagg_test_class
 class test_layered_schema01(wttest.WiredTigerTestCase):
 
-    uri_base = "test_layered_schema01"
+    test_name = __qualname__
+    uri_base = test_name
     conn_config = 'verbose=[layered],disaggregated=(role="leader"),' \
                 + 'disaggregated=(lose_all_my_data=true)'
 

@@ -108,6 +108,15 @@ __rts_btree_abort_update(WT_SESSION_IMPL *session, WT_ITEM *key, WT_UPDATE *firs
         }
 
         /*
+         * Clear the durable flags for the stable update to indicate that it has to be written
+         * again. A newer version was written to the page and has just been aborted, so the page
+         * holds a value that no longer belongs there, even though an earlier write may have already
+         * marked the stable update as written.
+         */
+        if (!dryrun && F_ISSET(S2BT(session), WT_BTREE_DISAGGREGATED))
+            F_CLR(stable_upd, WT_UPDATE_DURABLE | WT_UPDATE_PREPARE_DURABLE);
+
+        /*
          * Clear the history store flags for the stable update to indicate that this update should
          * be written to the history store later. The next time when this update is moved into the
          * history store, it will have a different stop time point.
@@ -127,7 +136,7 @@ __rts_btree_abort_update(WT_SESSION_IMPL *session, WT_ITEM *key, WT_UPDATE *firs
             if (stable_upd->type == WT_UPDATE_TOMBSTONE && F_ISSET(stable_upd, WT_UPDATE_HS)) {
                 tombstone = stable_upd;
                 for (stable_upd = stable_upd->next; stable_upd != NULL;
-                     stable_upd = stable_upd->next) {
+                  stable_upd = stable_upd->next) {
                     if (stable_upd->txnid != WT_TXN_ABORTED) {
                         /*
                          * We have seen a tombstone in the history store so the update cannot have a
@@ -737,7 +746,7 @@ __rts_btree_abort_ondisk_kv(WT_SESSION_IMPL *session, WT_REF *ref, WT_ROW *rip, 
           tw->durable_start_ts > rollback_timestamp ? "true" : "false",
           !__wti_rts_visibility_txn_visible_id(session, tw->start_txn) ? "true" : "false",
           !WT_TIME_WINDOW_HAS_STOP(tw) && prepared ? "true" : "false");
-        if (!F_ISSET(S2BT(session), WT_BTREE_IN_MEMORY))
+        if (!__wt_btree_stays_in_memory(S2BT(session)))
             return (__rts_btree_ondisk_fixup_key(
               session, ref, rip, recno, row_key, vpack, rollback_timestamp));
         else {
@@ -761,7 +770,7 @@ __rts_btree_abort_ondisk_kv(WT_SESSION_IMPL *session, WT_REF *ref, WT_ROW *rip, 
         if (WT_TIME_WINDOW_HAS_START_PREPARE(tw) && tw->start_prepared_id == tw->stop_prepared_id &&
           tw->start_prepare_ts == tw->stop_prepare_ts && tw->start_txn == tw->stop_txn) {
             WT_ASSERT(session, prepared);
-            if (!F_ISSET(S2BT(session), WT_BTREE_IN_MEMORY))
+            if (!__wt_btree_stays_in_memory(S2BT(session)))
                 return (__rts_btree_ondisk_fixup_key(
                   session, ref, rip, recno, row_key, vpack, rollback_timestamp));
             else {

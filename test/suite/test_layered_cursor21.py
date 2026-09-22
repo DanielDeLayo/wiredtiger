@@ -30,24 +30,23 @@ import wttest, wiredtiger
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_layered_cursor21.py
-#    Regression coverage for WT-15189: next_random on a layered table must
-#    return WT_NOTFOUND rather than spin when every reachable row is a
-#    tombstone. Covers the all-deleted-in-ingest case (stable empty) and the
-#    all-deleted-scattered case (tombstones in both ingest and stable).
+# Regression coverage for WT-15189: next_random on a layered table must
+# return WT_NOTFOUND rather than spin when every reachable row is a
+# tombstone. Covers the all-deleted-in-ingest case (stable empty) and the
+# all-deleted-scattered case (tombstones in both ingest and stable).
 
 @disagg_test_class
-@wttest.skip_for_hook("tiered", "Cannot run tiered storage in disagg mode")
 class test_layered_cursor21(wttest.WiredTigerTestCase):
 
+    test_name = __qualname__
     conn_config = 'disaggregated=(role="leader"),'
 
     uris = [
-        ('layered', dict(uri='layered:test_layered_cursor21')),
-        ('table', dict(uri='table:test_layered_cursor21')),
+        ('layered', dict(uri=f'layered:{test_name}')),
+        ('table', dict(uri=f'table:{test_name}')),
     ]
 
-    disagg_storages = gen_disagg_storages('test_layered_cursor21', disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
     scenarios = make_scenarios(disagg_storages, uris)
 
     nitems = 1000
@@ -77,11 +76,7 @@ class test_layered_cursor21(wttest.WiredTigerTestCase):
         self.conn.set_timestamp(f'stable_timestamp={self.timestamp_str(10)}')
         self.session.checkpoint()
 
-        follower_config = (
-            'disaggregated=(role="follower",'
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        )
-        self.reopen_conn(config=follower_config)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
     def truncate_range(self, start, stop, ts):
         c1 = self.session.open_cursor(self.uri)
@@ -95,7 +90,7 @@ class test_layered_cursor21(wttest.WiredTigerTestCase):
         c2.close()
 
     def remove_range(self, start, stop, ts):
-        cursor = self.session.open_cursor(self.uri)
+        cursor = self.session.open_cursor(self.uri, None, 'overwrite=false')
         self.session.begin_transaction()
         for i in range(start, stop + 1):
             cursor.set_key(self.key(i))
@@ -164,11 +159,7 @@ class test_layered_cursor21(wttest.WiredTigerTestCase):
         self.conn.set_timestamp(f'stable_timestamp={self.timestamp_str(20)}')
         self.session.checkpoint()
 
-        follower_config = (
-            'disaggregated=(role="follower",'
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        )
-        self.reopen_conn(config=follower_config)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         # Follower-side truncate: tombstones land in ingest.
         self.truncate_range(self.nitems, 2 * self.nitems - 1, 30)
@@ -191,11 +182,7 @@ class test_layered_cursor21(wttest.WiredTigerTestCase):
         self.conn.set_timestamp(f'stable_timestamp={self.timestamp_str(20)}')
         self.session.checkpoint()
 
-        follower_config = (
-            'disaggregated=(role="follower",'
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        )
-        self.reopen_conn(config=follower_config)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         # Follower-side remove: tombstones land in ingest.
         self.remove_range(self.nitems, 2 * self.nitems - 1, 30)

@@ -97,7 +97,6 @@ __wti_blkcache_map_read(WT_SESSION_IMPL *session, WT_ITEM *buf, const uint8_t *a
     if (!bm->map)
         return (0);
 
-    WT_ASSERT(session, !bm->is_multi_handle);
     WT_ASSERT(session, !bm->is_remote);
 
     block = bm->block;
@@ -108,8 +107,13 @@ __wti_blkcache_map_read(WT_SESSION_IMPL *session, WT_ITEM *buf, const uint8_t *a
     if (objectidp != NULL)
         *objectidp = objectid;
 
-    /* Not supported on multi-handle trees */
-    /* WT_ASSERT(session, block->objectid == objectid); */
+#ifndef HAVE_ANALYZE_CACHE
+    /*
+     * The cache analysis build repurposes the cookie's object ID to carry the persistent page ID,
+     * so the two no longer agree. Not supported on multi-handle trees either way.
+     */
+    WT_ASSERT(session, block->objectid == objectid);
+#endif
 
     /* Map the block if it's possible. */
     handle = block->fh->handle;

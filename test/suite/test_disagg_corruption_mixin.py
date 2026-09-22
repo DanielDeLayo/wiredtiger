@@ -30,15 +30,14 @@ import wttest
 from helper_disagg import DisaggCorruptionMixin, disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_disagg_corruption_mixin.py
-#    Exercise the DisaggCorruptionMixin helpers against a palite-backed
-#    disaggregated database.
+# Exercise the DisaggCorruptionMixin helpers against a palite-backed
+# disaggregated database.
 @disagg_test_class
 class test_disagg_corruption_mixin(wttest.WiredTigerTestCase, DisaggCorruptionMixin):
     def conn_config(self):
         return self.extensionsConfig() + ',create,disaggregated=(role="leader")'
 
-    disagg_storages = gen_disagg_storages('test_disagg_corruption_mixin', disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
     scenarios = make_scenarios(disagg_storages)
 
     uri = 'layered:test_corruption_mixin'
@@ -47,8 +46,11 @@ class test_disagg_corruption_mixin(wttest.WiredTigerTestCase, DisaggCorruptionMi
     def _populate(self):
         self.session.create(self.uri, 'key_format=S,value_format=S')
         c = self.session.open_cursor(self.uri, None, None)
+        self.ts_count = getattr(self, 'ts_count', 0) + 1
+        self.session.begin_transaction()
         for i in range(self.nentries):
             c[f'k{i:04d}'] = f'v{i:04d}'
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
         c.close()
         self.session.checkpoint()
 
@@ -92,8 +94,11 @@ class test_disagg_corruption_mixin(wttest.WiredTigerTestCase, DisaggCorruptionMi
         # Apply a series of modifications to create page deltas.
         for iteration in range(5):
             c = self.session.open_cursor(self.uri, None, None)
+            self.ts_count = getattr(self, 'ts_count', 0) + 1
+            self.session.begin_transaction()
             for i in range(self.nentries):
                 c[f'k{i:04d}'] = f'v{i:04d}-{iteration}'
+            self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.ts_count))
             c.close()
             self.session.checkpoint()
 

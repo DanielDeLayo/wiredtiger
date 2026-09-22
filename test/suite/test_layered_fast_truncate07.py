@@ -26,11 +26,10 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# test_layered_fast_truncate07.py
-#   Follower-initiated truncate stores a bounded range in the truncate list.
-#   Verifies NULL start/stop from the session API are resolved to the table's
-#   first/last visible key, both via the verbose log line and by the row set
-#   visible on subsequent reads.
+# Follower-initiated truncate stores a bounded range in the truncate list.
+# Verifies NULL start/stop from the session API are resolved to the table's
+# first/last visible key, both via the verbose log line and by the row set
+# visible on subsequent reads.
 
 import wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
@@ -40,14 +39,15 @@ from wtscenario import make_scenarios
 @disagg_test_class
 class test_layered_fast_truncate07(LayeredFastTruncateConfigMixin, wttest.WiredTigerTestCase):
 
+    test_name = __qualname__
     conn_config = 'verbose=[layered:3],disaggregated=(role="leader"),'
-    uri = 'layered:test_layered_fast_truncate07'
+    uri = f'layered:{test_name}'
 
     key_formats = [
         ('string', dict(key_format='S')),
         ('int', dict(key_format='i')),
     ]
-    disagg_storages = gen_disagg_storages('test_layered_fast_truncate07', disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
     scenarios = make_scenarios(disagg_storages, key_formats)
 
     nitems = 100
@@ -67,16 +67,14 @@ class test_layered_fast_truncate07(LayeredFastTruncateConfigMixin, wttest.WiredT
         self.session.create(self.uri, self.session_create_config())
         self.insert_range(1, self.nitems)
         self.session.checkpoint()
-        follower_config = ('verbose=[layered:3],disaggregated=(role="follower",'
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")')
-        self.reopen_conn(config=follower_config)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
     def insert_range(self, lo, hi):
         c = self.session.open_cursor(self.uri)
         for i in range(lo, hi + 1):
             self.session.begin_transaction()
             c[self.key(i)] = 'v'
-            self.session.commit_transaction()
+            self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(self.next_commit_ts()))
         c.close()
 
     def follower_visible_keys(self, forward=True):

@@ -33,11 +33,11 @@ from wiredtiger import stat
 from helper_disagg import DisaggConfigMixin, disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-# test_layered_delta01.py
 # Simple read write testing for leaf page delta
 
 @disagg_test_class
 class test_layered_delta01(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     encrypt = [
         ('none', dict(encryptor='none', encrypt_args='')),
         ('rotn', dict(encryptor='rotn', encrypt_args='keyid=13')),
@@ -52,8 +52,8 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
     # deltas a lot of the time.
     conn_base_config = 'transaction_sync=(enabled,method=fsync),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                      + 'page_delta=(delta_pct=100),,'
-    disagg_storages = gen_disagg_storages('test_layered_delta01', disagg_only = True)
-    uri='layered:test_layered_delta01'
+    disagg_storages = gen_disagg_storages(disagg_only = True)
+    uri=f'layered:{test_name}'
 
     # Make scenarios for different cloud service providers
     scenarios = make_scenarios(encrypt, compress, disagg_storages)
@@ -98,15 +98,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
                 self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(10))
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
@@ -148,15 +142,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
 
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
@@ -197,15 +185,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
 
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
@@ -245,15 +227,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
 
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
@@ -304,15 +280,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
 
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
@@ -372,15 +342,9 @@ class test_layered_delta01(wttest.WiredTigerTestCase):
 
         self.session.checkpoint()
 
-        stat_cursor = self.session.open_cursor('statistics:')
-        self.assertGreater(stat_cursor[stat.conn.rec_page_delta_leaf][2], 0)
-        stat_cursor.close()
+        self.assertStatGreaterSoon(stat.conn.rec_page_delta_leaf, 0)
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):

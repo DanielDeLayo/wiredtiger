@@ -31,11 +31,11 @@ from helper_disagg import DisaggConfigMixin, disagg_test_class, gen_disagg_stora
 from wtscenario import make_scenarios
 from wiredtiger import stat
 
-# test_layered_delta06.py
 # Simple read write testing for leaf page delta
 
 @disagg_test_class
 class test_layered_delta06(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     encrypt = [
         ('none', dict(encryptor='none', encrypt_args='')),
         ('rotn', dict(encryptor='rotn', encrypt_args='keyid=13')),
@@ -47,13 +47,13 @@ class test_layered_delta06(wttest.WiredTigerTestCase):
     ]
 
     uris = [
-        ('layered', dict(uri='layered:test_layered_delta06')),
-        ('btree', dict(uri='file:test_layered_delta06')),
+        ('layered', dict(uri=f'layered:{test_name}')),
+        ('btree', dict(uri=f'file:{test_name}')),
     ]
 
     conn_base_config = 'transaction_sync=(enabled,method=fsync),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                      + 'page_delta=(delta_pct=80),disaggregated=(lose_all_my_data=true),precise_checkpoint=true,'
-    disagg_storages = gen_disagg_storages('test_layered_delta06', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
     # Make scenarios for different cloud service providers
     scenarios = make_scenarios(encrypt, compress, disagg_storages, uris)
@@ -67,6 +67,12 @@ class test_layered_delta06(wttest.WiredTigerTestCase):
         if self.uri.startswith('file'):
             cfg += ',block_manager=disagg'
         return cfg
+
+    def stable_uri(self):
+        # Only the stable constituent of a layered table is checkpointed to disaggregated storage.
+        if self.uri.startswith('file'):
+            return self.uri
+        return 'file:{}.wt_stable'.format(self.test_name)
 
     def conn_config(self):
         enc_conf = 'encryption=(name={0},{1})'.format(self.encryptor, self.encrypt_args)
@@ -98,27 +104,17 @@ class test_layered_delta06(wttest.WiredTigerTestCase):
         cursor[str(1)] = value2
         self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(10))
 
-        # We should skip writing the page
+        # The update is above the stable timestamp, so this checkpoint has nothing stable to write
+        # for the table and must skip writing the page.
         self.session.checkpoint()
 
-        # Specify "local_files_action=ignore" to avoid deleting local files on reopen.
-        # This is important for the disaggregated storage test, as we want to read the
-        # checkpoint meta file without deleting it.
-        # Error text:
-        # unable to read root page from file:WiredTigerShared.wt_stable: WT_ERROR: non-specific WiredTiger error
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}",local_files_action=ignore)'
-        self.reopen_conn(config = follower_config)
+        # Assert that we have written no leaf page delta for the table. Read the statistic before
+        # switching roles: a follower does not allow access to the stable table's handle.
+        self.assertEqual(self.get_stat(stat.dsrc.rec_page_delta_leaf, uri=self.stable_uri()), 0)
 
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         self.session.begin_transaction("read_timestamp=" + self.timestamp_str(5))
         for i in range(self.nitems):
             self.assertEqual(cursor[str(i)], value1)
         self.session.rollback_transaction()
-
-        # Assert that we have written no leaf page delta.
-        stat_cursor = self.session.open_cursor('statistics:', None, None)
-        rec_page_delta_leaf = stat_cursor[stat.conn.rec_page_delta_leaf][2]
-        self.assertEqual(rec_page_delta_leaf, 0)
-        stat_cursor.close()

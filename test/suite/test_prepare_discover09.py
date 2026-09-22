@@ -26,18 +26,16 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# test_prepare_discover09.py
-#   A single prepared transaction that touches both a layered table and a
-#   regular (non-layered) table must be discoverable via
-#   "prepared_discover:" on the follower. Resolving the claim (commit or
-#   rollback) must apply to the updates on every table the transaction
-#   wrote, not only the layered ones.
+# A single prepared transaction that touches both a layered table and a
+# regular (non-layered) table must be discoverable via
+# "prepared_discover:" on the follower. Resolving the claim (commit or
+# rollback) must apply to the updates on every table the transaction
+# wrote, not only the layered ones.
 
 import wiredtiger, wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-@wttest.skip_for_hook("tiered", "Layered tables are not supported with tiered storage")
 @disagg_test_class
 class test_prepare_discover09(wttest.WiredTigerTestCase):
     conn_base_config = ('cache_size=10MB,statistics=(all),'
@@ -51,7 +49,7 @@ class test_prepare_discover09(wttest.WiredTigerTestCase):
         ('commit', dict(resolve='commit')),
         ('rollback', dict(resolve='rollback')),
     ]
-    disagg_storages = gen_disagg_storages('test_prepare_discover09', disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
     scenarios = make_scenarios(disagg_storages, resolution_scenarios)
 
     local_uri = 'table:local_plain'

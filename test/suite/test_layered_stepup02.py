@@ -30,23 +30,24 @@ import os, wiredtiger, wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtdataset import SimpleDataSet
 from wtscenario import make_scenarios
+from wttimestamp import WiredTigerTimeStamp
 
-# test_layered_stepup02.py
-#    Test the basic ability to insert on a follower.
+# Test the basic ability to insert on a follower.
 @disagg_test_class
 class test_layered_stepup02(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     conn_base_config = 'statistics=(all),statistics_log=(wait=1,json=true,on_close=true),'
     def conn_config(self):
         return self.conn_base_config + f'disaggregated=(role="{self.initial_role}")'
 
-    uri = "layered:test_layered_stepup02"
+    uri = f"layered:{test_name}"
     nentries = 1000
 
     role_scenarios = [
         ('leader', dict(initial_role='leader')),
         ('follower', dict(initial_role='follower')),
     ]
-    disagg_storages = gen_disagg_storages('test_layered_stepup02', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
     scenarios = make_scenarios(disagg_storages, role_scenarios)
 
     # Test simple inserts to a leader/follower
@@ -55,7 +56,9 @@ class test_layered_stepup02(wttest.WiredTigerTestCase):
 
         # No matter what the role, we should be able to insert and
         # see the results.
-        ds = SimpleDataSet(self, self.uri, self.nentries)
+        # Writes to layered tables require commit timestamps; use a
+        # timestamp generator so the inserts carry them.
+        ds = SimpleDataSet(self, self.uri, self.nentries, timestamp=WiredTigerTimeStamp())
         ds.populate()
         ds.check()
 
@@ -64,8 +67,8 @@ class test_layered_stepup02(wttest.WiredTigerTestCase):
             # in the same directory, insert some new items and see them.
 
             self.session.checkpoint()
-            self.reopen_conn(config=self.conn_base_config +
-                    f'disaggregated=(role="follower",checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")')
+            # Step down to a follower via a live reconfigure instead of restarting.
+            self.conn.reconfigure('disaggregated=(role="follower")')
 
             first_row = ds.rows + 1
             ds.rows += 1000

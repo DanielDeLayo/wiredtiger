@@ -31,19 +31,19 @@ from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 from wiredtiger import stat
 
-# test_layered_delta03.py
 # Test adjustable consecutive deltas
 
 @disagg_test_class
 class test_layered_delta03(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     uris = [
-        ('layered', dict(uri='layered:test_layered_delta03')),
-        ('btree', dict(uri='file:test_layered_delta03')),
+        ('layered', dict(uri=f'layered:{test_name}')),
+        ('btree', dict(uri=f'file:{test_name}')),
     ]
 
     conn_base_config = 'transaction_sync=(enabled,method=fsync),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                      + 'page_delta=(max_consecutive_delta=1),'
-    disagg_storages = gen_disagg_storages('test_layered_delta03', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
     nitems = 1000
 
@@ -68,28 +68,30 @@ class test_layered_delta03(wttest.WiredTigerTestCase):
         value1 = "aaaa"
         value2 = "bbbb"
 
+        self.session.begin_transaction()
         for i in range(self.nitems):
             cursor[str(i)] = value1
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(1))
 
         self.session.checkpoint()
 
+        self.session.begin_transaction()
         for i in range(self.nitems):
             if i % 10 == 0:
                 cursor[str(i)] = value2
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(2))
 
         self.session.checkpoint()
 
+        self.session.begin_transaction()
         for i in range(self.nitems):
             if i % 10 == 0:
                 cursor[str(i)] = value2
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(3))
 
         self.session.checkpoint()
 
-        follower_config = self.conn_base_config + 'disaggregated=(role="follower",' +\
-            f'checkpoint_meta="{self.disagg_get_complete_checkpoint_meta()}")'
-        self.reopen_conn(config = follower_config)
-
-        cursor = self.session.open_cursor(self.uri, None, None)
+        self.conn.reconfigure('disaggregated=(role="follower")')
 
         for i in range(self.nitems):
             if i % 10 == 0:
@@ -97,7 +99,4 @@ class test_layered_delta03(wttest.WiredTigerTestCase):
             else:
                 self.assertEqual(cursor[str(i)], value1)
 
-        stat_cursor = self.session.open_cursor('statistics:', None, None)
-        read_delta = stat_cursor[stat.conn.cache_read_leaf_delta][2]
-        self.assertEqual(read_delta, 0)
-        stat_cursor.close()
+        self.assertEqual(self.get_stat(stat.conn.cache_read_leaf_delta), 0)

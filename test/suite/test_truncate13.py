@@ -31,7 +31,6 @@ from wiredtiger import stat
 from wtdataset import SimpleDataSet
 from wtscenario import make_scenarios
 
-# test_truncate13.py
 # Test reading in the gaps created by a fast-delete.
 class test_truncate13(wttest.WiredTigerTestCase):
     session_config = 'isolation=snapshot'
@@ -206,11 +205,7 @@ class test_truncate13(wttest.WiredTigerTestCase):
         # (Except if we are running with trunc_with_remove.)
         stat_cursor = self.session.open_cursor('statistics:', None, None)
         fastdelete_pages = stat_cursor[stat.conn.rec_page_delete_fast][2]
-        if self.runningHook('tiered'):
-            # There's no way the test can guess whether fast delete is possible when
-            # flush_tier calls are "randomly" inserted.
-            pass
-        elif self.trunc_with_remove:
+        if self.trunc_with_remove:
             self.assertEqual(fastdelete_pages, 0)
         else:
             self.assertGreater(fastdelete_pages, 0)

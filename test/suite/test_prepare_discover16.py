@@ -26,26 +26,26 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 #
-# test_prepare_discover16.py
-#   A prepared delete that is captured by a checkpoint and later rolled
-#   back via the follower discover/claim flow must not affect reads of the
-#   underlying committed value once the rollback timestamp is stable. A
-#   fresh follower that opens the post-rollback checkpoint must read the
-#   key's original committed value.
+# A prepared delete that is captured by a checkpoint and later rolled
+# back via the follower discover/claim flow must not affect reads of the
+# underlying committed value once the rollback timestamp is stable. A
+# fresh follower that opens the post-rollback checkpoint must read the
+# key's original committed value.
 
+import re
 import wiredtiger
 import wttest
 from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 
-@wttest.skip_for_hook("tiered", "Layered tables are not supported with tiered storage")
 @disagg_test_class
 class test_prepare_discover16(wttest.WiredTigerTestCase):
-    tablename = 'test_prepare_discover16'
+    test_name = __qualname__
+    tablename = test_name
     uri = 'layered:' + tablename
     stable_uri = 'file:' + tablename + '.wt_stable'
 
-    disagg_storages = gen_disagg_storages('test_prepare_discover16', disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
     scenarios = make_scenarios(disagg_storages)
 
     conn_base_config = (
@@ -154,10 +154,17 @@ class test_prepare_discover16(wttest.WiredTigerTestCase):
                 f"failed ({e}); the rollback was not durable.")
 
         read_session = conn_follow.open_session()
-        read_session.begin_transaction('read_timestamp=' + self.timestamp_str(300))
         # Read the stable constituent directly so the assertion does not
-        # depend on the ingest constituent masking the stale state.
-        read_cursor = read_session.open_cursor(self.stable_uri)
+        # depend on the ingest constituent masking the stale state. A follower cannot
+        # open the live stable table: read its checkpoint view.
+        meta_cursor = read_session.open_cursor('metadata:')
+        meta_cursor.set_key(self.stable_uri)
+        self.assertEqual(meta_cursor.search(), 0)
+        ckpt_name = re.search(
+            r'checkpoint=\((WiredTigerCheckpoint\.\d+)=', meta_cursor.get_value()).group(1)
+        meta_cursor.close()
+        read_session.begin_transaction('read_timestamp=' + self.timestamp_str(300))
+        read_cursor = read_session.open_cursor(f'{self.stable_uri}/{ckpt_name}')
         read_cursor.set_key(target_key)
         try:
             ret = read_cursor.search()

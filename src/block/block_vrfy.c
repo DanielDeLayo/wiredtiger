@@ -328,7 +328,10 @@ __wt_block_verify_addr(
     /* Crack the cookie. */
     WT_RET(__wt_block_addr_unpack(
       session, block, addr, addr_size, &objectid, &offset, &size, &checksum));
+#ifdef HAVE_ANALYZE_CACHE
+    /* The cookie's object ID slot carries the persistent page ID in this build; ignore it here. */
     objectid = 0;
+#endif
 
     /* Add to the per-file list. */
     WT_RET(__verify_filefrag_add(session, block, NULL, offset, size, false));

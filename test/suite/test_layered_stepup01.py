@@ -29,10 +29,10 @@
 import os, sys, time, wiredtiger, wttest
 from helper_disagg import disagg_test_class
 
-# test_layered_stepup01.py
-#    Start a second WT that becomes leader and checks that content appears in the first.
+# Start a second WT that becomes leader and checks that content appears in the first.
 @disagg_test_class
 class test_layered_stepup01(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     nitems = 500
 
     conn_base_config = 'statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
@@ -41,7 +41,7 @@ class test_layered_stepup01(wttest.WiredTigerTestCase):
 
     create_session_config = 'key_format=S,value_format=S'
 
-    uri = "layered:test_layered_stepup01"
+    uri = f"layered:{test_name}"
 
     # Test inserting records into a follower that turned into a leader
     def test_layered_stepup01(self):
@@ -62,10 +62,12 @@ class test_layered_stepup01(wttest.WiredTigerTestCase):
         self.pr('opening cursor')
         cursor = self.session.open_cursor(self.uri, None, None)
 
+        self.session.begin_transaction()
         for i in range(self.nitems):
             cursor["Hello " + str(i)] = "World"
             cursor["Hi " + str(i)] = "There"
             cursor["OK " + str(i)] = "Go"
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(1))
 
         # Ensure that all data makes it to the follower.
         cursor.close()
@@ -83,10 +85,12 @@ class test_layered_stepup01(wttest.WiredTigerTestCase):
         # Part 3: Insert content to old follower
         #
         cursor = session_follow.open_cursor(self.uri, None, None)
+        session_follow.begin_transaction()
         for i in range(self.nitems):
             cursor["* Hello " + str(i)] = "World"
             cursor["* Hi " + str(i)] = "There"
             cursor["* OK " + str(i)] = "Go"
+        session_follow.commit_transaction('commit_timestamp=' + self.timestamp_str(2))
 
         cursor.close()
         session_follow.checkpoint()

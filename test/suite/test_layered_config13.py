@@ -37,25 +37,28 @@ helper_disagg.disagg_ignore_expected_output = disagg_ignore_expected_output
 
 logdir = "log"
 
-# test_layered_config13.py
 #    Test deleting local files on restart.
 @disagg_test_class
 class test_layered_config13(wttest.WiredTigerTestCase):
 
+    test_name = __qualname__
     conn_config = (
         "statistics=(all),statistics_log=(wait=1,json=true,on_close=true),"
         + "disaggregated=(lose_all_my_data=true),"
         + f"log=(enabled=true,path={logdir}),"
     )
 
-    disagg_storages = gen_disagg_storages("test_layered_config13", disagg_only=True)
+    disagg_storages = gen_disagg_storages(disagg_only=True)
 
     # Make scenarios for different cloud service providers.
     scenarios = make_scenarios(disagg_storages)
 
     create_session_config = "key_format=S,value_format=S"
-    uri = "layered:test_layered_config13"
-    uri_local = "table:test_layered_config13local"
+    uri = f"layered:{test_name}"
+    uri_local = f"table:{test_name}local"
+
+    # Keep track of the timestamps this test uses.
+    timestamp = 0
 
     def wiredtiger_open(self, *args, **kwargs):
         os.makedirs(logdir, exist_ok=True)
@@ -70,12 +73,16 @@ class test_layered_config13(wttest.WiredTigerTestCase):
 
         # Put data to tables with checkpoints to ensure that we generate some history.
         for value in ["aaa", "bbb", "ccc"]:
+            self.timestamp += 1
             cursor = self.session.open_cursor(self.uri, None, None)
+            self.session.begin_transaction()
             cursor["A"] = value
+            self.session.commit_transaction("commit_timestamp=" + self.timestamp_str(self.timestamp))
             cursor.close()
             cursor = self.session.open_cursor(self.uri_local, None, None)
             cursor["A"] = value
             cursor.close()
+            self.conn.set_timestamp("stable_timestamp=" + self.timestamp_str(self.timestamp))
             self.session.checkpoint()
 
         # Reopen the connection.

@@ -138,14 +138,29 @@ if(HAVE_UNITTEST)
     )
 
     FetchContent_MakeAvailable(Catch2)
+
+    # FIXME-WT-18597: Catch2 v2 uses std::nothrow without including <new>.
+    target_compile_options(Catch2
+        INTERFACE $<IF:$<BOOL:${MSVC_CXX_COMPILER}>,/FInew,-include new>
+    )
 endif()
 
 if(HAVE_ANALYZE_CACHE)
     include(FetchContent)
 
+    # Point this at a checkout of https://github.com/DanielDeLayo/Increment-and-Freeze.
+    # Defaults to a sibling of the WiredTiger source tree.
+    set(IAF_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../Increment-and-Freeze"
+        CACHE PATH "Path to the Increment-and-Freeze source tree")
+    if(NOT EXISTS "${IAF_SOURCE_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "HAVE_ANALYZE_CACHE is set but no Increment-and-Freeze checkout was found at "
+            "'${IAF_SOURCE_DIR}'. Pass -DIAF_SOURCE_DIR=<path> to point at one.")
+    endif()
+
     FetchContent_Declare(
         IAF
-        SOURCE_DIR /Users/danieldelayo/Gits/Increment-and-Freeze
+        SOURCE_DIR ${IAF_SOURCE_DIR}
     )
 
     FetchContent_MakeAvailable(IAF)
@@ -161,7 +176,6 @@ add_subdirectory(ext)
 
 # Collect all the library sources we need to compile from the source filelist.
 parse_filelist_source(${CMAKE_CURRENT_LIST_DIR}/dist/filelist wt_sources)
-
 
 if(WT_WIN)
     list(APPEND wt_source ${CMAKE_SOURCE_DIR}/cmake/configs/wiredtiger.def)
@@ -300,7 +314,6 @@ endif()
 # Build the wiredtiger test suites.
 add_subdirectory(bench/dhandle)
 add_subdirectory(bench/wtperf)
-add_subdirectory(bench/tiered)
 add_subdirectory(bench/wt2853_perf)
 add_subdirectory(examples)
 add_subdirectory(test)

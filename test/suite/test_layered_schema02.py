@@ -31,12 +31,12 @@ import wiredtiger
 import wttest
 from helper_disagg import disagg_test_class
 
-# test_layered_schema02.py
-#    Ensure a secondary that drops a table does not fall back to reading
-#    the stable table.
+# Ensure a secondary that drops a table does not fall back to reading
+# the stable table.
 @disagg_test_class
 class test_layered_schema02(wttest.WiredTigerTestCase):
-    uri = "layered:test_layered_schema02"
+    test_name = __qualname__
+    uri = f"layered:{test_name}"
 
     conn_base_config = ""
     conn_config = conn_base_config + 'disaggregated=(role="leader")'
@@ -55,10 +55,12 @@ class test_layered_schema02(wttest.WiredTigerTestCase):
         session_follow.create(self.uri, session_config)
 
         cursor = self.session.open_cursor(self.uri, None, None)
+        self.session.begin_transaction()
         for i in range(self.nitems):
             cursor["Hello " + str(i)] = "World"
             cursor["Hi " + str(i)] = "There"
             cursor["OK " + str(i)] = "Go"
+        self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(1))
         cursor.close()
 
         self.session.checkpoint()

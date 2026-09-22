@@ -213,6 +213,7 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
     WT_ADDR_COPY addr;
     WT_BTREE *btree;
     WT_DECL_RET;
+    WT_DSK_CACHE_STATE dsk_cache_state;
     WT_ITEM *deltas;
     WT_ITEM *disk_image_buf;
     WT_ITEM new_image, new_image_copy;
@@ -325,7 +326,8 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
         }
     }
 
-    if (shared_dsk_cache->enabled && F_ISSET(btree, WT_BTREE_DISAGGREGATED)) {
+    dsk_cache_state = __wt_atomic_load_uint8_acquire(&shared_dsk_cache->state);
+    if (WT_DSK_CACHE_CAN_READ(dsk_cache_state, btree)) {
         __wt_shared_dsk_cache_get(session, addr.addr, addr.size, &shared_dsk_item);
         if (shared_dsk_item != NULL) {
             /* Disagg always owns the disk image, so stamp the ownership flag directly. */
@@ -376,9 +378,9 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
         addr_tmp.type = addr.type;
         WT_TIME_AGGREGATE_COPY(&addr_tmp.ta, &full_image_ta);
 
-        int verify_ret =
-          __wt_verify_dsk_image(session, "[verify the newly built full disk image from deltas]",
-            new_image.data, new_image.size, &addr_tmp, WT_VRFY_DISK_EMPTY_PAGE_OK);
+        int verify_ret = __wt_verify_dsk_image(session,
+          "[verify the newly built full disk image from deltas]", new_image.data, new_image.size,
+          &addr_tmp, WT_VRFY_DISK_EMPTY_PAGE_OK | WT_VRFY_DISK_FROM_DELTA);
         WT_ASSERT_ALWAYS(session, verify_ret == 0,
           "verification failed for the newly built full disk image from deltas!");
 #endif
@@ -407,7 +409,7 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 
     disk_image_buf = build_full_disk_image_from_deltas ? &new_image_copy : &tmp[0];
 
-    if (shared_dsk_cache->enabled && F_ISSET(btree, WT_BTREE_DISAGGREGATED)) {
+    if (WT_DSK_CACHE_CAN_WRITE(dsk_cache_state, btree)) {
         bool shared_dsk_inserted = false;
 
         /* A cache hit takes the skip_disk_read path, so we can't already have an item here. */
@@ -435,9 +437,8 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
     }
 
     WT_ASSERT(session,
-      (shared_dsk_cache->enabled && F_ISSET(btree, WT_BTREE_DISAGGREGATED)) ?
-        shared_dsk_item != NULL :
-        shared_dsk_item == NULL);
+      WT_DSK_CACHE_CAN_WRITE(dsk_cache_state, btree) ? shared_dsk_item != NULL :
+                                                       shared_dsk_item == NULL);
     WT_ERR(__wti_page_inmem(session, ref,
       shared_dsk_item != NULL ? shared_dsk_item->data : disk_image_buf->data, page_flags,
       shared_dsk_item, &page, &instantiate_upd));
@@ -448,6 +449,8 @@ __page_read(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
     __wt_free(session, tmp);
 
 skip_disk_read:
+    if (page->type == WT_PAGE_ROW_LEAF && page->entries > 0)
+        __wt_btree_row_leaf_entries_update(btree, page->entries);
     if (page->disagg_info != NULL) {
         if (shared_dsk_item != NULL)
             block_meta = shared_dsk_item->block_meta;
@@ -495,7 +498,8 @@ skip_disk_read:
     WT_ERR(__wt_conn_page_history_track_read(session, page));
 
     /* Read only page must be clean. */
-    WT_ASSERT(session, !F_ISSET(btree, WT_BTREE_READONLY) || !__wt_page_is_modified(page));
+    WT_ASSERT(
+      session, !F_ISSET_ATOMIC_32(btree, WT_BTREE_READONLY) || !__wt_page_is_modified(page));
 
 skip_read:
     F_CLR_ATOMIC_8(ref, WT_REF_FLAG_READING);
@@ -568,6 +572,7 @@ __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags
      * dominate these statistics.
      */
     if (!LF_ISSET(WT_READ_CACHE)) {
+        WT_STAT_CONN_DSRC_INCR(session, cache_pages_requested);
         if (WT_IS_HS(session->dhandle))
             WT_STAT_CONN_DSRC_INCR(session, cache_pages_requested_hs);
         if (F_ISSET(ref, WT_REF_FLAG_INTERNAL))
@@ -588,7 +593,7 @@ __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags
 
     for (evict_skip = read_from_disk = wont_need = false, force_attempts = 0,
         sleep_usecs = yield_cnt = 0;
-         ;) {
+      ;) {
         switch (current_state = WT_REF_GET_STATE(ref)) {
         case WT_REF_DELETED:
             /* Optionally limit reads to cache-only. */
@@ -611,7 +616,7 @@ read:
              */
             if (!LF_ISSET(WT_READ_IGNORE_CACHE_SIZE))
                 WT_RET(__wt_evict_app_assist_worker_check(
-                  session, true, txn->mod_count == 0, false, NULL));
+                  session, true, txn->mod_count == 0, false, false, NULL));
             WT_RET(__page_read(session, ref, flags));
             read_from_disk = true;
             /* We just read a page, don't evict it before we have a chance to use it. */
@@ -838,7 +843,8 @@ skip_evict:
          * cache, substitute that for a sleep.
          */
         if (!LF_ISSET(WT_READ_IGNORE_CACHE_SIZE)) {
-            WT_RET(__wt_evict_app_assist_worker_check(session, true, true, false, &cache_work));
+            WT_RET(
+              __wt_evict_app_assist_worker_check(session, true, true, false, false, &cache_work));
             if (cache_work)
                 continue;
         }

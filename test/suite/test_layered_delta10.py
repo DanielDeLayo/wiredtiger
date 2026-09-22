@@ -31,11 +31,11 @@ from helper_disagg import disagg_test_class, gen_disagg_storages
 from wtscenario import make_scenarios
 from wiredtiger import stat
 
-# test_layered_delta10.py
 # Test no page delta is generated on page split.
 
 @disagg_test_class
 class test_layered_delta10(wttest.WiredTigerTestCase):
+    test_name = __qualname__
     split = [
         ('page_split', dict(page_split=True)),
         ('page_no_split', dict(page_split=False)),
@@ -43,20 +43,12 @@ class test_layered_delta10(wttest.WiredTigerTestCase):
 
     conn_config = 'cache_size=10MB,transaction_sync=(enabled,method=fsync),statistics=(all),statistics_log=(wait=1,json=true,on_close=true),' \
                      + 'disaggregated=(role="leader"),page_delta=(delta_pct=100,internal_page_delta=true,leaf_page_delta=true)'
-    disagg_storages = gen_disagg_storages('test_layered_delta05', disagg_only = True)
+    disagg_storages = gen_disagg_storages(disagg_only = True)
 
-    uri='layered:test_layered_delta10'
+    uri=f'layered:{test_name}'
 
     # Make scenarios for different cloud service providers
     scenarios = make_scenarios(disagg_storages, split)
-
-    def get_stat(self, stat, uri = None):
-        if not uri:
-            uri = ''
-        stat_cursor = self.session.open_cursor(f'statistics:{uri}', None, None)
-        val = stat_cursor[stat][2]
-        stat_cursor.close()
-        return val
 
     def test_page_split_delta(self):
         self.session.create(self.uri,
@@ -68,10 +60,15 @@ class test_layered_delta10(wttest.WiredTigerTestCase):
         # IF IT FAILS, IT MAY BE RECONCILIATION ISN'T CREATING THE SAME SIZE
         # PAGES AS BEFORE.
 
-        # Create a 4KB page (more than 3KB): 40 records w // 10 byte keys
-        # and 81 byte values.
-        for i in range(35):
+        # Create a 4KB page (more than 3KB): 34 records with 10-byte keys and 81-byte values.
+        # Each record takes 99 bytes on the page (10-byte key cell + 81-byte value cell + 8-byte
+        # commit timestamp), 34 x 99 + 44 (page header) = 3410 bytes. The timestamps also keep
+        # the update chains non-globally-visible (oldest is never set), and the 35th record's
+        # retained chain tips reconciliation's size accounting past the split point.
+        for i in range(34):
+            self.session.begin_transaction()
             cursor['%09d' % i] = 8 * ('%010d' % i)
+            self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(i + 1))
 
         # Stabilize
         self.reopen_conn()
@@ -81,10 +78,14 @@ class test_layered_delta10(wttest.WiredTigerTestCase):
         if self.page_split:
             # Make an update so we can later check that page split will not generate delta.
             cursor = self.session.open_cursor(self.uri, None)
+            self.session.begin_transaction()
             cursor['%09d' % 30] = 8 * ('%010d' % 31)
+            self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(35))
             # Append a few records so we're definitely (a little) over 4KB.
             for i in range(50,60):
+                self.session.begin_transaction()
                 cursor['%09d' % i] = 8 * ('%010d' % i)
+                self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(i - 50 + 36))
             cursor.close()
 
             self.session.checkpoint()
@@ -97,7 +98,9 @@ class test_layered_delta10(wttest.WiredTigerTestCase):
         else:
             # Make an update so we can later check that a delta has been generated.
             cursor = self.session.open_cursor(self.uri, None)
+            self.session.begin_transaction()
             cursor['%09d' % 30] = 8 * ('%010d' % 31)
+            self.session.commit_transaction('commit_timestamp=' + self.timestamp_str(35))
             cursor.close()
 
             self.session.checkpoint()
