@@ -3305,7 +3305,9 @@ wiredtiger_open(const char *home, WT_EVENT_HANDLER *event_handler, const char *c
     conn->iface = stdc;
 
 #ifdef HAVE_ANALYZE_CACHE
-    conn->iaf = Iaf_create(WT_IAF_SAMPLING_LOG2, WT_IAF_DEFAULT_MAX_BLOCKS);
+    conn->iaf =
+      Iaf_create_partitions(WT_IAF_SAMPLING_LOG2, WT_IAF_PARTITIONS, WT_IAF_DEFAULT_MAX_BLOCKS);
+    conn->iaf_intl = Iaf_create(WT_IAF_INTERNAL_SAMPLING_LOG2, WT_IAF_DEFAULT_MAX_BLOCKS);
 #endif
 
     /*

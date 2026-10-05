@@ -953,7 +953,8 @@ struct __wt_connection_impl {
     WT_CONNECTION iface;
 
 #ifdef HAVE_ANALYZE_CACHE
-    Iaf iaf;
+    Iaf iaf;      /* Every page access */
+    Iaf iaf_intl; /* Internal page accesses only */
 #endif
 
     /* For operations without an application-supplied session */

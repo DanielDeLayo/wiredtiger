@@ -800,8 +800,20 @@ skip_evict:
                       Iaf_write(iaf, (void *)(page->persistent_page_id), page->memory_footprint);
                     /* Whenever the IAF algorithm indicates that we should print, log the current */
                     /* state for debugging purposes. */
-                    if (should_print)
-                        __wt_analyze_cache_log(session);
+                    /*
+                     * Internal pages also get a curve of their own: they are few and almost always
+                     * hot, so in the combined curve they are lost in the leaf traffic. It is dumped
+                     * alongside the main curve rather than on its own schedule: unsampled, it would
+                     * otherwise dump several times as often, and the two dumps stay aligned.
+                     */
+                    if (F_ISSET(ref, WT_REF_FLAG_INTERNAL) && S2C(session)->iaf_intl != NULL)
+                        (void)Iaf_write(S2C(session)->iaf_intl, (void *)(page->persistent_page_id),
+                          page->memory_footprint);
+
+                    if (should_print) {
+                        __wt_analyze_cache_log(session, false);
+                        __wt_analyze_cache_log(session, true);
+                    }
                 }
             }
 #endif

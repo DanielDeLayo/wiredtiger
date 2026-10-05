@@ -221,8 +221,12 @@ __wti_connection_close(WT_CONNECTION_IMPL *conn)
 
 #ifdef HAVE_ANALYZE_CACHE
     if (conn->iaf != NULL) {
-        __wt_analyze_cache_log(session);
+        __wt_analyze_cache_log(session, false);
         Iaf_destroy(&(conn->iaf));
+    }
+    if (conn->iaf_intl != NULL) {
+        __wt_analyze_cache_log(session, true);
+        Iaf_destroy(&(conn->iaf_intl));
     }
 #endif
 
