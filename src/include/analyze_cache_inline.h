@@ -31,8 +31,8 @@
 /*
  * The internal-page curve samples 1 in 4 addresses. Internal pages are about half of all page
  * accesses but few distinct pages, and the root and upper levels take most of those accesses, so at
- * this rate the curve misses the steep drop they cause at the smallest sizes; above the provable
- * floor it matches the unsampled curve. It has its own lock, so it does not contend with the main
+ * this rate the curve misses the steep drop they cause at the smallest sizes; above about 0.2 MB
+ * it matches the unsampled curve. It has its own lock, so it does not contend with the main
  * curve.
  */
 #define WT_IAF_INTERNAL_SAMPLING_LOG2 2
@@ -83,9 +83,8 @@ __wt_analyze_cache_log(WT_SESSION_IMPL *session, bool internal)
     WT_CONNECTION_IMPL *conn;
     Iaf iaf;
     Iaf_size_stats sizes;
-    double cache_eps, hit_rate;
-    uint64_t cache_blocks, curve_blocks, floor_blocks, floor1, floor5, floor25, floor50, floor100;
-    uint64_t floor200;
+    double hit_rate;
+    uint64_t cache_blocks, curve_blocks;
     int64_t bytes_inuse, reads, requests;
     size_t nparts, part;
     char *iaf_str;
@@ -121,20 +120,8 @@ __wt_analyze_cache_log(WT_SESSION_IMPL *session, bool internal)
     cache_blocks = (uint64_t)conn->cache_size / IAF_BLOCK_SIZE;
     curve_blocks = Iaf_max_cache_blocks(iaf);
 
-    /*
-     * How much rounding page sizes up to whole blocks distorts the curve, and the smallest cache
-     * sizes at which sampling is provably accurate to within 1%, 5%, 10%, 25%, 50%, 100% and 200%.
-     */
+    /* How much rounding page sizes up to whole blocks distorts the curve. */
     Iaf_get_size_stats(iaf, &sizes);
-    floor_blocks = Iaf_provable_floor_blocks(iaf);
-    floor1 = Iaf_provable_floor_blocks_at(iaf, 0.01);
-    floor5 = Iaf_provable_floor_blocks_at(iaf, 0.05);
-    floor25 = Iaf_provable_floor_blocks_at(iaf, 0.25);
-    floor50 = Iaf_provable_floor_blocks_at(iaf, 0.5);
-    floor100 = Iaf_provable_floor_blocks_at(iaf, 1.0);
-    floor200 = Iaf_provable_floor_blocks_at(iaf, 2.0);
-    /* And how far the curve can be trusted at the configured cache size itself. */
-    cache_eps = Iaf_provable_eps_at(iaf, cache_blocks);
 
     /* One record per partition: every curve in one record could pass mongod's log size limit. */
     nparts = Iaf_partitions(iaf);
@@ -144,19 +131,15 @@ __wt_analyze_cache_log(WT_SESSION_IMPL *session, bool internal)
         __wt_verbose_info(session, WT_VERB_EVICTION,
           "IAF-SUMMARY curve=%s,partition=%" WT_SIZET_FMT ",partitions=%" WT_SIZET_FMT
           ",block_bytes=%d,grid_ratio=%.2f,sampling_log2=%d,cache_bytes=%" PRIu64
-          ",cache_blocks=%" PRIu64 ",curve_max_blocks=%" PRIu64 ",provable_floor_blocks=%" PRIu64
-          ",provable_floor_blocks_by_pct=1:%" PRIu64 "|5:%" PRIu64 "|10:%" PRIu64 "|25:%" PRIu64
-          "|50:%" PRIu64 "|100:%" PRIu64 "|200:%" PRIu64
-          ",provable_eps_at_cache=%.4f"
+          ",cache_blocks=%" PRIu64 ",curve_max_blocks=%" PRIu64
           ",curve_covers_cache=%s,bytes_inuse=%" PRId64 ",pages_requested=%" PRId64
           ",pages_read=%" PRId64 ",hit_rate_pct=%.4f,stats_enabled=%s,sampled_accesses=%" PRIu64
           ",small_accesses=%" PRIu64 ",sampled_bytes=%" PRIu64 ",rounded_bytes=%" PRIu64 "\n%s",
           internal ? "internal" : "all", part, nparts, IAF_BLOCK_SIZE, IAF_GRID_RATIO,
           internal ? WT_IAF_INTERNAL_SAMPLING_LOG2 : WT_IAF_SAMPLING_LOG2, conn->cache_size,
-          cache_blocks, curve_blocks, floor_blocks, floor1, floor5, floor_blocks, floor25, floor50,
-          floor100, floor200, cache_eps, cache_blocks <= curve_blocks ? "true" : "false",
-          bytes_inuse, requests, reads, hit_rate, WT_STAT_ENABLED(session) ? "true" : "false",
-          sizes.accesses, sizes.small_accesses, sizes.bytes, sizes.rounded_bytes, iaf_str);
+          cache_blocks, curve_blocks, cache_blocks <= curve_blocks ? "true" : "false", bytes_inuse,
+          requests, reads, hit_rate, WT_STAT_ENABLED(session) ? "true" : "false", sizes.accesses,
+          sizes.small_accesses, sizes.bytes, sizes.rounded_bytes, iaf_str);
         Iaf_free_string(iaf_str);
     }
 }
