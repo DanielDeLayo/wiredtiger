@@ -453,6 +453,7 @@ conn_stats = [
     EvictStat('eviction_server_skip_pages_last_running', 'eviction server skips pages that are written with transactions greater than the last running'),
     EvictStat('eviction_server_skip_pages_prune_timestamp', 'eviction server skips pages that are written with transactions greater than the prune timestamp'),
     EvictStat('eviction_server_skip_pages_prune_timestamp_not_move', 'eviction server skips pages that have been reconciled previously at the same prune timestamp'),
+    EvictStat('eviction_server_skip_pages_restored_unchanged', 'eviction server skips restored pages whose pinned stable timestamp and oldest transaction ID have not moved since the last eviction'),
     EvictStat('eviction_server_skip_pages_retry', 'eviction server skips pages that previously failed eviction and likely will again'),
     EvictStat('eviction_server_skip_stable_trees', 'eviction server skips stable btrees in disagg'),
     EvictStat('eviction_server_skip_stale_disagg_pages', 'eviction server skips pages on an outdated disaggregated read-only btree that a reader still has open'),
@@ -937,6 +938,7 @@ conn_stats = [
     ##########################################
     # Session operations
     ##########################################
+    SessionOpStat('session_hs_verify_btrees_checked', 'history store verify number of btrees checked against the data store', 'no_clear,no_scale'),
     SessionOpStat('session_open', 'open session count', 'no_clear,no_scale'),
     SessionOpStat('session_query_ts', 'session query timestamp calls'),
     SessionOpStat('session_table_alter_fail', 'table alter failed calls', 'no_clear,no_scale'),
@@ -1107,6 +1109,10 @@ dsrc_stats = [
     BtreeStat('btree_maxleafkey', 'maximum leaf page key size', 'max_aggregate,no_scale,size'),
     BtreeStat('btree_maxleafpage', 'maximum leaf page size', 'max_aggregate,no_scale,size'),
     BtreeStat('btree_maxleafvalue', 'maximum leaf page value size', 'max_aggregate,no_scale,size'),
+    BtreeStat('btree_obsolete_inline_analyzed', 'pages analyzed for obsolete inline values', 'no_scale,tree_walk'),
+    BtreeStat('btree_obsolete_inline_bytes', 'obsolete inline value bytes', 'no_scale,size,tree_walk'),
+    BtreeStat('btree_obsolete_inline_bytes_mixed', 'obsolete inline value bytes on mixed pages', 'no_scale,size,tree_walk'),
+    BtreeStat('btree_obsolete_inline_pages', 'pages with obsolete inline values', 'no_scale,tree_walk'),
     BtreeStat('btree_overflow', 'overflow pages', 'no_scale,tree_walk'),
     BtreeStat('btree_row_empty_values', 'row-store empty values', 'no_scale,tree_walk'),
     BtreeStat('btree_row_internal', 'row-store internal pages', 'no_scale,tree_walk'),

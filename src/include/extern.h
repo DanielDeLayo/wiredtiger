@@ -26,8 +26,6 @@ extern bool __wt_config_get_choice(const char **choices, WT_CONFIG_ITEM *item)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern bool __wt_conn_is_disagg(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern bool __wt_counter_backoff(uint64_t v, uint64_t accuracy)
-  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern bool __wt_disagg_has_picked_up_checkpoint(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern bool __wt_fsync_background_chk(WT_SESSION_IMPL *session)
@@ -862,8 +860,9 @@ extern int __wt_metadata_remove(WT_SESSION_IMPL *session, const char *key)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_metadata_search(WT_SESSION_IMPL *session, const char *key, char **valuep)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern int __wt_metadata_stable_uris_for_id(WT_SESSION_IMPL *session, uint32_t btree_id,
-  char **first_urip, char **second_urip) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_metadata_stable_uris_for_id(WT_SESSION_IMPL *session, WT_CURSOR *cursor,
+  uint32_t btree_id, char **first_urip, char **second_urip)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_metadata_turtle_rewrite(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_metadata_update(WT_SESSION_IMPL *session, const char *key, const char *value)
@@ -2088,9 +2087,15 @@ static WT_INLINE bool __wt_page_is_modified(WT_PAGE *page)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 static WT_INLINE bool __wt_page_is_reconciling(WT_PAGE *page)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+static WT_INLINE bool __wt_page_type_matches_btree(WT_BTREE *btree, uint8_t page_type)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 static WT_INLINE bool __wt_ref_addr_copy(WT_SESSION_IMPL *session, WT_REF *ref, WT_ADDR_COPY *copy)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 static WT_INLINE bool __wt_ref_is_root(WT_REF *ref)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+static WT_INLINE bool __wt_ref_type_matches_page(WT_REF *ref, uint8_t page_type)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+static WT_INLINE bool __wt_ref_type_mismatch_returns_error(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 static WT_INLINE bool __wt_row_leaf_value(WT_PAGE *page, WT_ROW *rip, WT_ITEM *value)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
