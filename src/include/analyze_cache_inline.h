@@ -38,6 +38,46 @@
 #define WT_IAF_INTERNAL_SAMPLING_LOG2 2
 
 /*
+ * __wt_analyze_cache_page_id --
+ *     A tree page ID as an IAF page ID. Page IDs come from the tree's own counter, next_page_id,
+ *     which WiredTiger saves in each checkpoint of the tree and restores when the tree opens, so
+ *     they aren't reused after a restart. The on-disk address keeps 32 bits of the ID; a tree that
+ *     runs past that leaves its newer pages out of the curve.
+ */
+static WT_INLINE uint64_t
+__wt_analyze_cache_page_id(uint64_t page_id)
+{
+    return (page_id > UINT32_MAX ? IAF_PAGE_OVERFLOW : page_id);
+}
+
+/*
+ * __wt_analyze_cache_new_page_id --
+ *     A new IAF page ID from the current tree's page-ID counter.
+ */
+static WT_INLINE uint64_t
+__wt_analyze_cache_new_page_id(WT_SESSION_IMPL *session)
+{
+    WT_BTREE *btree;
+
+    if ((btree = S2BT_SAFE(session)) == NULL)
+        return (IAF_PAGE_OVERFLOW);
+    return (__wt_analyze_cache_page_id(__wt_atomic_fetch_add_uint64(&btree->next_page_id, 1)));
+}
+
+/*
+ * __wt_analyze_cache_key --
+ *     The key IAF tracks a page by. Page IDs are unique within a tree only, so the key adds the
+ *     tree's file ID. The reserved IDs pass through unchanged, for IAF to recognize.
+ */
+static WT_INLINE void *
+__wt_analyze_cache_key(WT_SESSION_IMPL *session, uint64_t page_id)
+{
+    if (page_id <= IAF_ID_RESERVED_BOUNDARY)
+        return ((void *)page_id);
+    return ((void *)(((uint64_t)S2BT(session)->id << 32) | page_id));
+}
+
+/*
  * Placeholder bound. conn->iaf has to be created at the top of wiredtiger_open, before the cache
  * size is known, but __wt_analyze_cache_bound() replaces this from __wt_cache_create() -- still
  * ahead of the first metadata read -- so no request is ever recorded under it.

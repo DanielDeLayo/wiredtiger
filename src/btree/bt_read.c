@@ -789,7 +789,7 @@ skip_evict:
                 assert(
                   page->persistent_page_id != IAF_ID_UNINIT && "Uninitialized persistent_page_id!");
                 if (page->persistent_page_id == IAF_ID_NEED_REINIT) {
-                    page->persistent_page_id = Iaf_grab_id(iaf);
+                    page->persistent_page_id = __wt_analyze_cache_new_page_id(session);
                 }
                 /* If the page has a valid persistent_page_id, write it to the IAF algorithm. This
                  */
@@ -797,7 +797,8 @@ skip_evict:
                 if (iaf != NULL && page->persistent_page_id != IAF_ID_UNINIT &&
                   !LF_ISSET(WT_READ_CACHE)) {
                     bool should_print =
-                      Iaf_write(iaf, (void *)(page->persistent_page_id), page->memory_footprint);
+                      Iaf_write(iaf, __wt_analyze_cache_key(session, page->persistent_page_id),
+                        page->memory_footprint);
                     /* Whenever the IAF algorithm indicates that we should print, log the current */
                     /* state for debugging purposes. */
                     /*
@@ -807,7 +808,8 @@ skip_evict:
                      * otherwise dump several times as often, and the two dumps stay aligned.
                      */
                     if (F_ISSET(ref, WT_REF_FLAG_INTERNAL) && S2C(session)->iaf_intl != NULL)
-                        (void)Iaf_write(S2C(session)->iaf_intl, (void *)(page->persistent_page_id),
+                        (void)Iaf_write(S2C(session)->iaf_intl,
+                          __wt_analyze_cache_key(session, page->persistent_page_id),
                           page->memory_footprint);
 
                     if (should_print) {

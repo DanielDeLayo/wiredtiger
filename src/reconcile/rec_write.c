@@ -2509,15 +2509,18 @@ __rec_write_image(WT_SESSION_IMPL *session, WTI_RECONCILE *r, WTI_REC_CHUNK *chu
     } else {
         block_meta = multi->block_meta;
     }
-    // On a split, generate a new page id for everyone. Otherwise, keep the same page.
+    /*
+     * On a split, every new page gets a new ID: the tree page ID just assigned above. Otherwise the
+     * page keeps its own.
+     */
     if (last_block && r->multi_next == 1) {
         if (page->persistent_page_id == IAF_ID_NEED_REINIT ||
             page->persistent_page_id == IAF_ID_UNINIT) {
-            page->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+            page->persistent_page_id = __wt_analyze_cache_page_id(block_meta->page_id);
         }
         block_meta->persistent_page_id = page->persistent_page_id;
     } else {
-        block_meta->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        block_meta->persistent_page_id = __wt_analyze_cache_page_id(block_meta->page_id);
     }
 #else
     block_meta = multi->block_meta;

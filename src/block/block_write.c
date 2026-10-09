@@ -212,7 +212,7 @@ __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf,
     if (block_meta != NULL &&
         (block_meta->persistent_page_id == IAF_ID_NEED_REINIT ||
          block_meta->persistent_page_id == IAF_ID_UNINIT)) {
-        block_meta->persistent_page_id = Iaf_grab_id(S2C(session)->iaf);
+        block_meta->persistent_page_id = __wt_analyze_cache_new_page_id(session);
     }
     if (block_meta != NULL && block_meta->persistent_page_id > UINT32_MAX) {
         block_meta->persistent_page_id = IAF_PAGE_OVERFLOW;
